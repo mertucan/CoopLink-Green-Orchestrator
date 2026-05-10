@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import RiskBadge from '../components/RiskBadge'
+import SpoilageSimulator from '../components/SpoilageSimulator'
 import { useToast } from '../components/ToastProvider'
 import { useAssistantMessage } from '../hooks/useAssistant'
 import { useCooperatives, useInventory, useProducts } from '../hooks/useInventory'
@@ -13,6 +14,7 @@ export default function Inventory({ goTo }) {
   const [notice, setNotice] = useState(null)
   const [proposingId, setProposingId] = useState(null)
   const [analyzingId, setAnalyzingId] = useState(null)
+  const [simulatedItemId, setSimulatedItemId] = useState(null)
   const { data: items = [], isLoading, isError } = useInventory(coop)
   const { data: cooperatives = [] } = useCooperatives()
   const { data: products = [] } = useProducts()
@@ -110,7 +112,16 @@ export default function Inventory({ goTo }) {
         </div>
       )}
       <div className="panel overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
+          <colgroup>
+            <col className="w-[19%]" />
+            <col className="w-[13%]" />
+            <col className="w-[12%]" />
+            <col className="w-[9%]" />
+            <col className="w-[12%]" />
+            <col className="w-[13%]" />
+            <col className="w-[22%]" />
+          </colgroup>
           <thead className="border-b border-[#dfe8df] bg-mist text-moss">
             <tr>
               <th className="px-4 py-3">Kooperatif</th>
@@ -118,45 +129,70 @@ export default function Inventory({ goTo }) {
               <th className="px-4 py-3">Kategori</th>
               <th className="px-4 py-3">Miktar</th>
               <th className="px-4 py-3">Son Kullanma</th>
-              <th className="px-4 py-3">Risk</th>
-              <th className="px-4 py-3">İşlem</th>
+              <th className="px-4 py-3 text-center">Risk</th>
+              <th className="px-4 py-3 text-center">İşlem</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && <tr><td className="px-4 py-4 text-moss" colSpan="7">Stoklar yükleniyor...</td></tr>}
             {isError && <tr><td className="px-4 py-4 text-red-700" colSpan="7">Stok verileri alınamadı.</td></tr>}
             {rows.map((item, index) => (
-              <tr key={item.id || index} className="border-b border-[#edf2ed]">
-                <td className="px-4 py-3">
-                  <div className="font-medium text-ink">{item.cooperative_name || item.cooperative_id}</div>
-                  <div className="text-xs text-moss">{item.cooperative_region}</div>
-                </td>
-                <td className="px-4 py-3 font-medium">{item.product_name || item.product_id}</td>
-                <td className="px-4 py-3">{item.product_category || '-'}</td>
-                <td className="px-4 py-3">{item.quantity_kg} kg</td>
-                <td className="px-4 py-3">{item.expires_at ? new Date(item.expires_at).toLocaleDateString('tr-TR') : '-'}</td>
-                <td className="px-4 py-3"><RiskBadge value={item.risk_score} /></td>
-                <td className="px-4 py-3">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      className="h-9 w-28 rounded-md bg-ink px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={analyzingId === item.id}
-                      onClick={() => handleGeminiAnalyze(item)}
-                    >
-                      {analyzingId === item.id ? 'Analiz...' : 'Gemini Analiz'}
-                    </button>
-                    {Number(item.risk_score) > 0.7 && (
-                    <button
-                      className="h-9 w-28 rounded-md bg-clay px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={proposingId === item.id}
-                      onClick={() => handlePropose(item)}
-                    >
-                      {proposingId === item.id ? 'Oluşturuluyor' : 'Takas Öner'}
-                    </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+              <Fragment key={item.id || index}>
+                <tr className={`border-b border-[#edf2ed] ${simulatedItemId === item.id ? 'bg-[#f7fbf7]' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="truncate font-medium text-ink">{item.cooperative_name || item.cooperative_id}</div>
+                    <div className="truncate text-xs text-moss">{item.cooperative_region}</div>
+                  </td>
+                  <td className="truncate px-4 py-3 font-medium">{item.product_name || item.product_id}</td>
+                  <td className="truncate px-4 py-3">{item.product_category || '-'}</td>
+                  <td className="whitespace-nowrap px-4 py-3">{item.quantity_kg} kg</td>
+                  <td className="px-4 py-3">{item.expires_at ? new Date(item.expires_at).toLocaleDateString('tr-TR') : '-'}</td>
+                  <td className="px-4 py-3">
+                    <div className="mx-auto w-28">
+                      <RiskBadge value={item.risk_score} />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex min-w-[252px] justify-end gap-2">
+                      <button
+                        className="h-9 w-20 shrink-0 rounded-md bg-ink px-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={analyzingId === item.id}
+                        onClick={() => handleGeminiAnalyze(item)}
+                      >
+                        {analyzingId === item.id ? 'Analiz...' : 'Gemini'}
+                      </button>
+                      <button
+                        className={`h-9 w-24 shrink-0 rounded-md border px-2 text-xs font-semibold leading-none ${simulatedItemId === item.id ? 'border-leaf bg-[#eef8f1] text-leaf' : 'border-[#cfdccf] bg-white text-ink'}`}
+                        onClick={() => setSimulatedItemId(simulatedItemId === item.id ? null : item.id)}
+                      >
+                        {simulatedItemId === item.id ? 'Açık' : 'Simülasyon'}
+                      </button>
+                      {Number(item.risk_score) > 0.7 && (
+                      <button
+                        className="h-9 w-20 shrink-0 rounded-md bg-clay px-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={proposingId === item.id}
+                        onClick={() => handlePropose(item)}
+                      >
+                        {proposingId === item.id ? '...' : 'Takas'}
+                      </button>
+                      )}
+                      {Number(item.risk_score) <= 0.7 && <span className="h-9 w-20 shrink-0" aria-hidden="true" />}
+                    </div>
+                  </td>
+                </tr>
+                {simulatedItemId === item.id && (
+                  <tr className="border-b border-[#dfe8df] bg-[#f7fbf7]">
+                    <td className="px-4 py-4" colSpan="7">
+                      <SpoilageSimulator
+                        item={item}
+                        isProposing={proposingId === item.id}
+                        onClose={() => setSimulatedItemId(null)}
+                        onPropose={handlePropose}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {!isLoading && !isError && rows.length === 0 && <tr><td className="px-4 py-4 text-moss" colSpan="7">Filtrelerle eşleşen kayıt bulunamadı.</td></tr>}
           </tbody>
