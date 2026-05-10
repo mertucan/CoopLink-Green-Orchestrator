@@ -1,3 +1,4 @@
+import os
 import asyncio
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
@@ -61,19 +62,22 @@ async def create_inventory(item: InventoryCreate):
     
     # --- YENİ BİLDİRİM KODU BAŞLANGICI ---
     if created:
-        # Kendi Telegram ID'ni buraya sabitliyoruz (Demo/Sunum için)
-        CHAT_ID = "8266316848"
+        # ID'yi kodun içinden değil, güvenli .env dosyasından alıyoruz
+        CHAT_ID = os.getenv("TELEGRAM_ADMIN_ID")
         
-        mesaj = (
-            f"🔔 **YENİ İLAN SİSTEME DÜŞTÜ!**\n\n"
-            f"📦 **Ürün:** {product_name}\n"
-            f"⚖️ **Miktar:** {item.quantity_kg}kg\n"
-            f"⚠️ **Risk Skoru:** {risk:.2f}\n\n"
-            f"Asistan analizini görmek için /analiz komutunu kullanabilirsin."
-        )
-        
-        # Endpoint'i yavaşlatmamak için bildirimi arka planda asenkron olarak gönderiyoruz
-        asyncio.create_task(send_push_notification(CHAT_ID, mesaj))
+        if CHAT_ID:
+            mesaj = (
+                f"🔔 **YENİ İLAN SİSTEME DÜŞTÜ!**\n\n"
+                f"📦 **Ürün:** {product_name}\n"
+                f"⚖️ **Miktar:** {item.quantity_kg}kg\n"
+                f"⚠️ **Risk Skoru:** {risk:.2f}\n\n"
+                f"Asistan analizini görmek için /analiz komutunu kullanabilirsin."
+            )
+            
+            # Endpoint'i yavaşlatmamak için bildirimi arka planda asenkron olarak gönderiyoruz
+            asyncio.create_task(send_push_notification(CHAT_ID, mesaj))
+        else:
+            print("⚠️ TELEGRAM_ADMIN_ID .env dosyasında bulunamadığı için bildirim atılamadı.")
     # --- BİLDİRİM KODU SONU ---
 
     return {"item": created[0] if created else payload}
