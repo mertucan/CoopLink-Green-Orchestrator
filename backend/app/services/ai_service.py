@@ -1,21 +1,21 @@
 import os
-from google import genai
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Yeni nesil Gemini Client'ı kuruyoruz
 api_key = os.getenv("GEMINI_API_KEY")
 
 if api_key:
-    client = genai.Client(api_key=api_key)
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
 else:
     print("⚠️ HATA: .env dosyasında GEMINI_API_KEY bulunamadı!")
-    client = None
+    model = None
 
 def get_coop_analysis(inventory_data: str) -> str:
     """Supabase'den gelen stok verisini okuyup takas önerisi üreten fonksiyon."""
-    if not client:
+    if not model:
         return "⚠️ Gemini API anahtarı eksik olduğu için analiz yapılamıyor."
 
     prompt = f"""
@@ -38,11 +38,7 @@ def get_coop_analysis(inventory_data: str) -> str:
     """
 
     try:
-        # Yeni kütüphanenin çağrı yapısı
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
+        response = model.generate_content(prompt)
         return response.text
     except Exception as e:
         return f"Analiz sırasında bir hata oluştu: {str(e)}"

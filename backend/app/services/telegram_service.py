@@ -24,7 +24,7 @@ load_dotenv()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     welcome_text = (
-        f"Merhaba {user_name}! Ben **CooBot** 🤖\n\n"
+        f"Merhaba {user_name}! Ben *CooBot* 🤖\n\n"
         "👉 /stok - Canlı kooperatif envanterini listelerim.\n"
         "👉 /analiz - Gemini AI ile riskli ürünleri bulur, yeşil takas rotaları çizerim."
     )
