@@ -1,25 +1,29 @@
 import sys
 import os
 import asyncio
+from dotenv import load_dotenv
 
 # Dosyaları bulabilmesi için ana dizini yola ekliyoruz
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from backend.app.services.notification_service import send_push_notification
 
-# Senin Telegram Kimliğin
-TUBA_CHAT_ID = "8266316848"
+# .env dosyasındaki değişkenleri okuması için load_dotenv'i çağırıyoruz
+load_dotenv()
+
+# ID'yi kodun içine DEĞİL, güvenli olan .env dosyasından çekiyoruz
+TEST_CHAT_ID = os.getenv("TELEGRAM_ADMIN_ID")
 
 mesaj = """
-🔔 **SİSTEM UYARISI: YENİ İLAN!**
+🔔 **TEST BİLDİRİMİ!**
 
-🌱 Ege Tarım Kooperatifi sisteme yeni bir ürün ekledi.
-📦 **Ürün:** 50kg Domates
-⚠️ **Durum:** Acil takas bekleniyor!
-
-Hemen /analiz komutunu kullanarak yeşil rotaları hesaplayabilirsin.
+Bu mesaj CoopLink Yeşil Orkestra sisteminin bildirim altyapısını test etmek için gönderilmiştir.
+Eğer bu mesajı okuyorsan, sistem kusursuz çalışıyor demektir! 🚀
 """
 
-print(f"🚀 Füze ateşleniyor... Hedef ID: {TUBA_CHAT_ID}")
-# Bildirimi gönderiyoruz
-asyncio.run(send_push_notification(TUBA_CHAT_ID, mesaj))
+if TEST_CHAT_ID:
+    print(f"🚀 Füze ateşleniyor... Hedef ID: {TEST_CHAT_ID}")
+    asyncio.run(send_push_notification(TEST_CHAT_ID, mesaj))
+else:
+    print("⚠️ HATA: .env dosyasında TELEGRAM_ADMIN_ID bulunamadı!")
+    print("Lütfen .env dosyanıza TELEGRAM_ADMIN_ID=123456789 formatında kendi ID'nizi ekleyin.")
