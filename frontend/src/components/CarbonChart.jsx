@@ -12,7 +12,7 @@ const fallback = [
 
 export default function CarbonChart({ data = fallback }) {
   return (
-    <section className="panel h-80 p-4">
+    <section className="panel h-80 w-full min-w-0 p-4">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-ink">Haftalık CO2 tasarrufu</h2>
         <p className="text-sm text-moss">Optimize takas ve rota etkisi</p>
@@ -29,4 +29,3 @@ export default function CarbonChart({ data = fallback }) {
     </section>
   )
 }
-

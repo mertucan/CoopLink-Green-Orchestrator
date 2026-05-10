@@ -120,22 +120,24 @@ export default function Operations({ goTo }) {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
+      <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+        <section className="panel min-w-0 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-ink">Bekleyen Onaylar</h2>
               <p className="text-sm text-moss">Onaylandığında stok düşer, puan ve karbon log yazılır.</p>
             </div>
             <button onClick={() => goTo('swaps')} className="rounded-md bg-mist px-3 py-2 text-sm font-medium text-moss">Tümü</button>
           </div>
-          {pendingSwaps.slice(0, 3).map((swap) => <SwapCard key={swap.id} swap={swap} />)}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+            {pendingSwaps.slice(0, 3).map((swap) => <SwapCard key={swap.id} swap={swap} />)}
+          </div>
           {pendingSwaps.length === 0 && <div className="panel p-4 text-sm text-moss">Bekleyen onay yok.</div>}
         </section>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <CarbonChart data={stats?.weekly_carbon} />
-          <section className="panel p-4">
+          <section className="panel w-full min-w-0 p-4">
             <h2 className="text-lg font-semibold text-ink">Kooperatif Performansı</h2>
             <div className="mt-4 space-y-3">
               {leaderboard.slice(0, 4).map((coop, index) => (
@@ -149,7 +151,7 @@ export default function Operations({ goTo }) {
               ))}
             </div>
           </section>
-          <section className="panel p-4">
+          <section className="panel w-full min-w-0 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-ink">Son AI Kararları</h2>

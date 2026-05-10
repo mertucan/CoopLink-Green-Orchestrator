@@ -34,6 +34,7 @@ class StockAgent:
                         **row,
                         "product_name": product.get("name", row.get("product_id")),
                         "product_category": product.get("category", ""),
+                        "product_spoilage_rate_days": product.get("spoilage_rate_days"),
                         "cooperative_name": cooperative.get("name", row.get("cooperative_id")),
                         "cooperative_region": cooperative.get("region", ""),
                     }
