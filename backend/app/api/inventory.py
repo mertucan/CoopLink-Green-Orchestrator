@@ -1,9 +1,13 @@
+import asyncio
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 
 from app.agents.stock_agent import calculate_risk
 from app.models.inventory import InventoryCreate
 from app.services.supabase_client import get_supabase_client
+
+# Bizim bildirim servisini dahil ediyoruz
+from app.services.notification_service import send_push_notification
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -42,10 +46,34 @@ async def create_inventory(item: InventoryCreate):
     product_rows = supabase.table("products").select("*").eq("id", item.product_id).limit(1).execute().data
     if not product_rows:
         raise HTTPException(status_code=404, detail="Ürün bulunamadı.")
+    
+    # Bildirimde ürünün adını göstermek için yakalıyoruz
+    product_name = product_rows[0].get("name", "Bilinmeyen Ürün")
+    
     risk = calculate_risk(item.quantity_kg, item.expires_at, int(product_rows[0]["spoilage_rate_days"]))
     payload = item.model_dump()
     payload["expires_at"] = item.expires_at.isoformat()
     payload["risk_score"] = risk
     payload["updated_at"] = datetime.utcnow().isoformat()
+    
+    # Veriyi Supabase'e ekliyoruz
     created = supabase.table("inventory").insert(payload).execute().data
+    
+    # --- YENİ BİLDİRİM KODU BAŞLANGICI ---
+    if created:
+        # Kendi Telegram ID'ni buraya sabitliyoruz (Demo/Sunum için)
+        CHAT_ID = "8266316848"
+        
+        mesaj = (
+            f"🔔 **YENİ İLAN SİSTEME DÜŞTÜ!**\n\n"
+            f"📦 **Ürün:** {product_name}\n"
+            f"⚖️ **Miktar:** {item.quantity_kg}kg\n"
+            f"⚠️ **Risk Skoru:** {risk:.2f}\n\n"
+            f"Asistan analizini görmek için /analiz komutunu kullanabilirsin."
+        )
+        
+        # Endpoint'i yavaşlatmamak için bildirimi arka planda asenkron olarak gönderiyoruz
+        asyncio.create_task(send_push_notification(CHAT_ID, mesaj))
+    # --- BİLDİRİM KODU SONU ---
+
     return {"item": created[0] if created else payload}
