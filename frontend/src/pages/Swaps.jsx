@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import SwapCard from '../components/SwapCard'
+import { useAuth } from '../hooks/useAuth'
 import { useSwaps } from '../hooks/useSwaps'
 
 const tabs = [
@@ -9,12 +10,13 @@ const tabs = [
 ]
 
 export default function Swaps() {
+  const { isCooperative } = useAuth()
   const [status, setStatus] = useState('pending')
   const { data: swaps = [], isLoading, isError } = useSwaps(status)
   return (
     <div className="space-y-4">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <h1 className="text-2xl font-semibold text-ink">Takas yönetimi</h1>
+        <h1 className="text-2xl font-semibold text-ink">{isCooperative ? 'Size önerilen takaslar' : 'Takas yönetimi'}</h1>
         <div className="flex rounded-md border border-[#dfe8df] bg-white p-1">
           {tabs.map(([id, label]) => (
             <button key={id} onClick={() => setStatus(id)} className={`rounded px-3 py-2 text-sm ${status === id ? 'bg-leaf text-white' : 'text-moss'}`}>{label}</button>

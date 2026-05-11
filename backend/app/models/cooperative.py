@@ -7,6 +7,7 @@ class Cooperative(BaseModel):
     name: str
     region: str
     contact_phone: str
+    role: str = "cooperative"
     green_score: int = 0
     latitude: float | None = None
     longitude: float | None = None

@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import html
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
@@ -21,6 +22,7 @@ from app.agents.stock_agent import calculate_risk
 from app.api.swaps import propose_swap, update_swap
 from app.models.swap import SwapStatus, SwapUpdate
 from app.services.ai_service import get_coop_analysis
+from app.services.inventory_lifecycle import process_expired_inventory
 from app.services.supabase_client import get_supabase_client
 
 load_dotenv()
@@ -92,25 +94,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu:start":
         text = "Operasyon menüsü hazır. Bir işlem seçebilirsin."
-        await query.edit_message_text(text, reply_markup=main_keyboard())
+        await _edit_query(query, text, main_keyboard())
         _log_telegram_event(update, "Başla", text, "telegram_button", {"action": "open_main_menu"})
         return
 
     if data == "menu:stock":
         text, keyboard = _build_stock_message(risky_only=False)
-        await query.edit_message_text(text, reply_markup=keyboard)
+        await _edit_query(query, text, keyboard)
         _log_telegram_event(update, "Stokları Göster", text, "telegram_button", {"action": "stock_list"})
         return
 
     if data == "menu:risky":
         text, keyboard = _build_stock_message(risky_only=True)
-        await query.edit_message_text(text, reply_markup=keyboard)
+        await _edit_query(query, text, keyboard)
         _log_telegram_event(update, "Riskli Stoklar", text, "telegram_button", {"action": "risky_stock_list"})
         return
 
     if data == "menu:swaps":
         text, keyboard = _build_pending_swaps_message()
-        await query.edit_message_text(text, reply_markup=keyboard)
+        await _edit_query(query, text, keyboard)
         _log_telegram_event(update, "Bekleyen Takaslar", text, "telegram_button", {"action": "pending_swaps"})
         return
 
@@ -120,7 +122,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu:customer_summary":
         text = _build_customer_summary()
-        await query.edit_message_text(text, reply_markup=main_keyboard())
+        await _edit_query(query, text, main_keyboard())
         _log_telegram_event(
             update,
             "Müşteri Özeti",
@@ -131,28 +133,55 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "menu:add_stock":
+        context.user_data.pop("mode", None)
+        context.user_data.pop("add_stock_cooperative_id", None)
+        context.user_data.pop("add_stock_cooperative_name", None)
+        text, keyboard = _build_cooperative_selection_message()
+        await _edit_query(query, text, keyboard)
+        _log_telegram_event(update, "Stok Ekle", text, "telegram_button", {"action": "add_stock_select_coop"})
+        return
+
+    if data.startswith("add_stock_coop:"):
+        cooperative_id = data.split(":", 1)[1]
+        cooperative = _find_cooperative(cooperative_id)
+        if not cooperative:
+            text, keyboard = _build_cooperative_selection_message()
+            await _edit_query(query, "Kooperatif bulunamadı. Lütfen tekrar seç.\n\n" + text, keyboard)
+            return
+
         context.user_data["mode"] = ADD_STOCK_MODE
+        context.user_data["add_stock_cooperative_id"] = cooperative["id"]
+        context.user_data["add_stock_cooperative_name"] = cooperative.get("name", "Kooperatif")
         text = (
-            "Stok eklemek için şu formatta yaz:\n\n"
+            f"Kooperatif: {cooperative.get('name', 'Kooperatif')}\n\n"
+            "Stok eklemek için şu formatta yaz:\n"
             "ürün miktar gün\n\n"
-            "Örnek: domates 80 2\n"
-            "Bu, varsayılan kooperatife 80 kg domates ve 2 gün son kullanma süresiyle stok ekler."
+            "Örnek: domates 80 2"
         )
-        await query.edit_message_text(
+        await _edit_query(
+            query,
             text,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("İptal", callback_data="menu:cancel")]]),
+            InlineKeyboardMarkup([[InlineKeyboardButton("İptal", callback_data="menu:cancel")]]),
         )
-        _log_telegram_event(update, "Stok Ekle", text, "telegram_button", {"action": "add_stock_prompt"})
+        _log_telegram_event(
+            update,
+            "Kooperatif Seç",
+            text,
+            "telegram_button",
+            {"action": "add_stock_coop_selected", "cooperative_id": cooperative["id"]},
+        )
         return
 
     if data == "menu:help":
-        await query.edit_message_text(_help_text(), reply_markup=main_keyboard())
+        await _edit_query(query, _help_text(), main_keyboard())
         _log_telegram_event(update, "Yardım", "Telegram yardım menüsü açıldı.", "telegram_button", {"action": "help"})
         return
 
     if data == "menu:cancel":
         context.user_data.pop("mode", None)
-        await query.edit_message_text("İşlem iptal edildi.", reply_markup=main_keyboard())
+        context.user_data.pop("add_stock_cooperative_id", None)
+        context.user_data.pop("add_stock_cooperative_name", None)
+        await _edit_query(query, "İşlem iptal edildi.", main_keyboard())
         _log_telegram_event(update, "İptal", "İşlem iptal edildi.", "telegram_button", {"action": "cancel"})
         return
 
@@ -168,7 +197,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{item.get('to_cooperative_name', 'Kooperatif')}\n"
                 f"Skor: {float(item.get('match_score', 0)):.2f}"
             )
-            await query.edit_message_text(text, reply_markup=_swap_action_keyboard(item.get("id")))
+            await _edit_query(query, text, _swap_action_keyboard(item.get("id")))
             _log_telegram_event(
                 update,
                 f"propose:{inventory_id}",
@@ -178,7 +207,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as exc:
             text = f"Takas önerisi oluşturulamadı: {exc}"
-            await query.edit_message_text(text, reply_markup=main_keyboard())
+            await _edit_query(query, text, main_keyboard())
             _log_telegram_event(update, f"propose:{inventory_id}", text, "telegram_propose_swap", {"error": str(exc)})
         return
 
@@ -190,11 +219,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = result.get("message", f"Takas {status.value} durumuna alındı.")
         except Exception as exc:
             text = f"Takas güncellenemedi: {exc}"
-        await query.edit_message_text(text, reply_markup=main_keyboard())
+        await _edit_query(query, text, main_keyboard())
         _log_telegram_event(update, data, text, "telegram_update_swap", {"swap_id": swap_id, "status": status.value})
         return
 
-    await query.edit_message_text("Bu işlem tanınmadı.", reply_markup=main_keyboard())
+    await _edit_query(query, "Bu işlem tanınmadı.", main_keyboard())
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -204,15 +233,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text.strip()
 
     if context.user_data.get("mode") == ADD_STOCK_MODE:
+        cooperative_id = context.user_data.get("add_stock_cooperative_id")
+        cooperative_name = context.user_data.get("add_stock_cooperative_name")
         context.user_data.pop("mode", None)
-        text = _create_stock_from_text(message)
-        await update.message.reply_text(text, reply_markup=main_keyboard())
-        _log_telegram_event(update, message, text, "telegram_add_inventory", {"action": "add_stock"})
+        context.user_data.pop("add_stock_cooperative_id", None)
+        context.user_data.pop("add_stock_cooperative_name", None)
+        text = _create_stock_from_text(message, cooperative_id, cooperative_name)
+        await update.message.reply_text(_telegram_html(text), parse_mode="HTML", reply_markup=main_keyboard())
+        _log_telegram_event(
+            update,
+            message,
+            text,
+            "telegram_add_inventory",
+            {"action": "add_stock", "cooperative_id": cooperative_id},
+        )
         return
 
     orchestrator = Orchestrator()
     response = await orchestrator.handle_message(f"telegram:{update.effective_chat.id}", message)
-    await update.message.reply_text(response, reply_markup=main_keyboard())
+    await update.message.reply_text(_telegram_html(response), parse_mode="HTML", reply_markup=main_keyboard())
 
 
 async def _send_analysis(update: Update):
@@ -229,11 +268,11 @@ async def _send_analysis(update: Update):
             inventory_text += f"- {c_name}: {qty}kg {p_name} (Risk Skoru: {risk})\n"
 
         result = get_coop_analysis(inventory_text)
-        await status_msg.edit_text(result, reply_markup=main_keyboard())
+        await status_msg.edit_text(_telegram_html(result), parse_mode="HTML", reply_markup=main_keyboard())
         _log_telegram_event(update, "AI Analiz", result, "telegram_analysis", {"action": "analysis"})
     except Exception as exc:
         text = f"Analiz yapılamadı: {exc}"
-        await status_msg.edit_text(text, reply_markup=main_keyboard())
+        await status_msg.edit_text(_telegram_html(text), parse_mode="HTML", reply_markup=main_keyboard())
         _log_telegram_event(update, "AI Analiz", text, "telegram_analysis", {"error": str(exc)})
 
 
@@ -251,9 +290,9 @@ def _build_stock_message(risky_only: bool) -> tuple[str, InlineKeyboardMarkup]:
     buttons = []
     for row in rows:
         risk = float(row.get("risk_score", 0))
-        status = "Süresi geçti" if row.get("is_expired") else "Takas bekliyor" if row.get("has_pending_swap") else f"Risk {risk:.2f}"
+        status = "İmha edildi" if row.get("is_disposed") else "Süresi geçti" if row.get("is_expired") else "Takas bekliyor" if row.get("has_pending_swap") else f"Risk {risk:.2f}"
         lines.append(f"- {row.get('cooperative_name')}: {row.get('quantity_kg')} kg {row.get('product_name')} ({status})")
-        if risk >= 0.7 and not row.get("is_expired") and not row.get("has_pending_swap"):
+        if risk >= 0.7 and not row.get("is_expired") and not row.get("is_disposed") and not row.get("has_pending_swap"):
             buttons.append([InlineKeyboardButton(f"Takas öner: {row.get('product_name')}", callback_data=f"propose:{row.get('id')}")])
     buttons.append([InlineKeyboardButton("Menü", callback_data="menu:help")])
     return "\n".join(lines), InlineKeyboardMarkup(buttons)
@@ -302,7 +341,34 @@ def _build_customer_summary() -> str:
     return "\n".join(lines)
 
 
-def _create_stock_from_text(text: str) -> str:
+def _build_cooperative_selection_message() -> tuple[str, InlineKeyboardMarkup]:
+    supabase = get_supabase_client()
+    cooperatives = supabase.table("cooperatives").select("id, name, region, role").order("name").execute().data or []
+    cooperatives = [row for row in cooperatives if row.get("role") != "admin"]
+
+    if not cooperatives:
+        return "Stok eklemek için kayıtlı kooperatif bulunamadı.", main_keyboard()
+
+    buttons = []
+    for cooperative in cooperatives[:30]:
+        name = cooperative.get("name", "Kooperatif")
+        region = cooperative.get("region")
+        label = f"{name} - {region}" if region else name
+        buttons.append([InlineKeyboardButton(label[:64], callback_data=f"add_stock_coop:{cooperative['id']}")])
+
+    buttons.append([InlineKeyboardButton("İptal", callback_data="menu:cancel")])
+    return "Stok eklenecek kooperatifi seç.", InlineKeyboardMarkup(buttons)
+
+
+def _find_cooperative(cooperative_id: str) -> dict | None:
+    supabase = get_supabase_client()
+    rows = supabase.table("cooperatives").select("id, name, region, role").eq("id", cooperative_id).limit(1).execute().data or []
+    if not rows or rows[0].get("role") == "admin":
+        return None
+    return rows[0]
+
+
+def _create_stock_from_text(text: str, cooperative_id: str | None = None, cooperative_name: str | None = None) -> str:
     match = re.search(r"([a-zA-ZçğıöşüÇĞİÖŞÜ]+)\s+(\d+(?:[.,]\d+)?)\s+(\d+)", text)
     if not match:
         return "Format anlaşılamadı. Örnek: domates 80 2"
@@ -316,10 +382,13 @@ def _create_stock_from_text(text: str) -> str:
     if not product:
         return f"Ürün bulunamadı: {product_text}"
 
-    cooperative_id = os.getenv("TELEGRAM_DEFAULT_COOPERATIVE_ID")
+    if not cooperative_id:
+        cooperative_id = os.getenv("TELEGRAM_DEFAULT_COOPERATIVE_ID")
     if not cooperative_id:
         cooperatives = supabase.table("cooperatives").select("*").limit(1).execute().data or []
-        cooperative_id = cooperatives[0]["id"] if cooperatives else None
+        if cooperatives:
+            cooperative_id = cooperatives[0]["id"]
+            cooperative_name = cooperatives[0].get("name")
     if not cooperative_id:
         return "Stok eklemek için kooperatif bulunamadı."
 
@@ -334,11 +403,13 @@ def _create_stock_from_text(text: str) -> str:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     supabase.table("inventory").insert(payload).execute()
-    return f"Stok eklendi: {quantity:g} kg {product.get('name')} | Son kullanma: {days} gün | Risk: {risk:.2f}"
+    coop_text = f" | Kooperatif: {cooperative_name}" if cooperative_name else ""
+    return f"Stok eklendi: {quantity:g} kg {product.get('name')}{coop_text} | Son kullanma: {days} gün | Risk: {risk:.2f}"
 
 
 def _enriched_inventory() -> list[dict]:
     supabase = get_supabase_client()
+    process_expired_inventory(supabase)
     inventory = supabase.table("inventory").select("*").execute().data or []
     products = supabase.table("products").select("*").execute().data or []
     cooperatives = supabase.table("cooperatives").select("*").execute().data or []
@@ -354,12 +425,14 @@ def _enriched_inventory() -> list[dict]:
         expires_at = datetime.fromisoformat(str(item.get("expires_at")).replace("Z", "+00:00"))
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
+        is_disposed = item.get("disposal_status") == "disposed" or bool(item.get("disposed_at"))
         rows.append(
             {
                 **item,
                 "product_name": product.get("name", item.get("product_id")),
                 "cooperative_name": coop.get("name", item.get("cooperative_id")),
                 "is_expired": expires_at <= now,
+                "is_disposed": is_disposed,
                 "has_pending_swap": pending_map.get((item.get("cooperative_id"), item.get("product_id"))) is not None,
             }
         )
@@ -425,8 +498,24 @@ def _log_telegram_event(update: Update, message: str, response: str, selected_to
 
 async def _reply(update: Update, text: str, keyboard: InlineKeyboardMarkup | None = None):
     if update.message:
-        return await update.message.reply_text(text, reply_markup=keyboard)
-    return await update.callback_query.message.reply_text(text, reply_markup=keyboard)
+        return await update.message.reply_text(_telegram_html(text), parse_mode="HTML", reply_markup=keyboard)
+    return await update.callback_query.message.reply_text(_telegram_html(text), parse_mode="HTML", reply_markup=keyboard)
+
+
+async def _edit_query(query, text: str, keyboard: InlineKeyboardMarkup | None = None):
+    return await query.edit_message_text(_telegram_html(text), parse_mode="HTML", reply_markup=keyboard)
+
+
+def _telegram_html(text: str) -> str:
+    """Telegram'da **kalın** işaretlerini gerçek kalına çevirir, diğer metni güvenli kaçırır."""
+    parts = re.split(r"(\*\*[^*]+?\*\*)", text or "")
+    formatted = []
+    for part in parts:
+        if part.startswith("**") and part.endswith("**"):
+            formatted.append(f"<b>{html.escape(part[2:-2])}</b>")
+        else:
+            formatted.append(html.escape(part).replace("**", ""))
+    return "".join(formatted)
 
 
 async def _ensure_allowed(update: Update) -> bool:

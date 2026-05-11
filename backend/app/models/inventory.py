@@ -13,9 +13,13 @@ class InventoryItem(BaseModel):
     id: str | None = None
     cooperative_id: str
     product_id: str
-    quantity_kg: float = Field(gt=0)
+    quantity_kg: float = Field(ge=0)
     expires_at: datetime
     risk_score: float = Field(default=0, ge=0, le=1)
+    disposal_status: str = "active"
+    disposed_at: datetime | None = None
+    disposed_quantity_kg: float = 0
+    disposal_penalty_points: int = 0
     updated_at: datetime | None = None
 
 
@@ -24,4 +28,3 @@ class InventoryCreate(BaseModel):
     product_id: str
     quantity_kg: float = Field(gt=0)
     expires_at: datetime
-

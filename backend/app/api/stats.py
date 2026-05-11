@@ -1,18 +1,28 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.services.impact_engine import build_impact_summary
+from app.services.auth_service import get_optional_user
+from app.services.inventory_lifecycle import process_expired_inventory
 from app.services.supabase_client import get_supabase_client
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
 
 @router.get("")
-async def stats():
+async def stats(user: dict | None = Depends(get_optional_user)):
     supabase = get_supabase_client()
+    process_expired_inventory(supabase)
     swaps = supabase.table("swaps").select("*").execute().data or []
     products = supabase.table("products").select("*").execute().data or []
-    cooperatives = supabase.table("cooperatives").select("*").execute().data or []
+    cooperatives = supabase.table("cooperatives").select("*").eq("role", "cooperative").execute().data or []
+    if user and user.get("role") == "cooperative":
+        swaps = [
+            swap
+            for swap in swaps
+            if swap.get("from_cooperative_id") == user["id"] or swap.get("to_cooperative_id") == user["id"]
+        ]
+        cooperatives = [coop for coop in cooperatives if coop.get("id") == user["id"]]
     product_map = {row["id"]: row for row in products}
     approved = [swap for swap in swaps if swap.get("status") == "approved"]
     pending = [swap for swap in swaps if swap.get("status") == "pending"]
@@ -75,7 +85,8 @@ async def stats():
 @router.get("/leaderboard")
 async def leaderboard():
     supabase = get_supabase_client()
-    cooperatives = supabase.table("cooperatives").select("*").execute().data or []
+    process_expired_inventory(supabase)
+    cooperatives = supabase.table("cooperatives").select("*").eq("role", "cooperative").execute().data or []
     swaps = supabase.table("swaps").select("*").execute().data or []
     rows = []
     for coop in cooperatives:

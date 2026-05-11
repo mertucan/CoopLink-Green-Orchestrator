@@ -1,40 +1,40 @@
-import { ArrowRight, Bot, Boxes, Handshake, Leaf, MapPinned, Route, ShieldCheck, Sprout, Utensils } from 'lucide-react'
+import { ArrowRight, Boxes, Handshake, Leaf, MapPinned, Route, ShieldCheck, Sprout, Utensils } from 'lucide-react'
 
 const impactItems = [
-  { label: 'Gıda kaybı erken yakalanır', value: 'risk skoru', icon: ShieldCheck },
-  { label: 'Kooperatifler eşleşir', value: 'akıllı takas', icon: Handshake },
-  { label: 'Etki görünür olur', value: 'öğün + CO2 + TL', icon: Leaf }
+  { label: 'Risk skoru', value: 'erken uyarı', icon: ShieldCheck },
+  { label: 'Takas', value: 'eşleşme', icon: Handshake },
+  { label: 'Etki', value: 'CO2 + TL', icon: Leaf }
 ]
 
 const workflow = [
-  { title: 'Stok sinyali', text: 'Riskli ürünler son kullanma ve miktara göre öne çıkar.', icon: Boxes },
-  { title: 'AI karar izi', text: 'Mesaj, buton ve öneri akışları AI Logs üzerinde kalıcılaşır.', icon: Bot },
-  { title: 'Rota etkisi', text: 'Bekleyen takaslar harita üzerinde operasyon rotasına dönüşür.', icon: Route }
+  { title: 'Stok', text: 'Riskli ürünler öne çıkar.', icon: Boxes },
+  { title: 'Takas', text: 'Uygun kooperatif seçilir.', icon: Handshake },
+  { title: 'Rota', text: 'Bekleyen akış haritada görünür.', icon: Route }
 ]
 
 export default function Home({ goTo }) {
   return (
     <div className="space-y-8">
       <section className="relative overflow-hidden rounded-lg border border-[#d7e4d8] bg-[#f8fbf7] shadow-[0_18px_44px_rgba(23,33,27,0.08)]">
-        <div className="grid min-h-[520px] lg:grid-cols-[1fr_0.92fr]">
+        <div className="grid min-h-[500px] lg:grid-cols-[1fr_0.92fr]">
           <div className="flex flex-col justify-center px-6 py-10 sm:px-8 lg:px-10">
             <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-md border border-[#cfe0d1] bg-white px-3 py-2 text-sm font-semibold text-leaf">
               <Sprout size={16} />
-              Kooperatif ağ zekası
+              Kooperatif ağı
             </div>
             <h1 className="max-w-3xl text-4xl font-semibold leading-tight text-ink sm:text-5xl">
-              CoopLink gıda kaybını, takası ve lojistiği tek operasyon akışında birleştirir.
+              Stok riskini takasa dönüştür.
             </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-moss">
-              Green Orchestrator, kooperatiflerin stok fazlasını erken yakalar, en uygun takas eşleşmesini önerir ve kurtarılan sosyal, çevresel ve ekonomik değeri görünür hale getirir.
+            <p className="mt-5 max-w-xl text-base leading-7 text-moss">
+              CoopLink, fazla stoğu erken yakalar ve doğru kooperatifle eşleştirir.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <button onClick={() => goTo('operations')} className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-md bg-leaf px-5 text-sm font-semibold text-white">
-                Operasyona Başla
+                Operasyon
                 <ArrowRight size={17} />
               </button>
               <button onClick={() => goTo('riskMap')} className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-md border border-[#cfdccd] bg-white px-5 text-sm font-semibold text-moss">
-                Haritayı Gör
+                Harita
                 <MapPinned size={17} />
               </button>
             </div>
@@ -63,15 +63,12 @@ export default function Home({ goTo }) {
 
       <section className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
         <div className="soft-panel p-6">
-          <p className="text-sm font-semibold text-leaf">Neden farklı?</p>
-          <h2 className="mt-2 text-3xl font-semibold text-ink">Sadece stok tutmaz, kaybın olmadan önce karar üretir.</h2>
-          <p className="mt-4 text-sm leading-6 text-moss">
-            CoopLink her stok satırını operasyon sinyaline çevirir. Risk artınca takas önerisi, takas açılınca rota, işlem tamamlanınca kurtarılan değer ortaya çıkar.
-          </p>
+          <p className="text-sm font-semibold text-leaf">Özet</p>
+          <h2 className="mt-2 text-3xl font-semibold text-ink">Stok, rota ve etki tek akışta.</h2>
           <div className="mt-6 grid grid-cols-3 gap-3 text-sm">
             <Metric value="112" label="öğün" />
             <Metric value="2.1 kg" label="CO2" />
-            <Metric value="1.450 TL" label="yerel değer" />
+            <Metric value="1.450 TL" label="değer" />
           </div>
         </div>
 
@@ -98,10 +95,6 @@ function NetworkScene() {
   return (
     <div className="absolute inset-0 overflow-hidden">
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(47,143,91,0.08)_1px,transparent_1px),linear-gradient(180deg,rgba(47,143,91,0.08)_1px,transparent_1px)] bg-[size:42px_42px]" />
-      <div className="absolute left-[10%] top-[15%] h-16 w-16 rounded-md border border-[#c6d8c8] bg-white shadow-sm" />
-      <div className="absolute right-[13%] top-[20%] h-20 w-20 rounded-md border border-[#c6d8c8] bg-white shadow-sm" />
-      <div className="absolute bottom-[19%] left-[18%] h-20 w-20 rounded-md border border-[#c6d8c8] bg-white shadow-sm" />
-      <div className="absolute bottom-[15%] right-[22%] h-16 w-16 rounded-md border border-[#c6d8c8] bg-white shadow-sm" />
       <RouteLine className="left-[22%] top-[27%] w-[45%] rotate-[8deg]" />
       <RouteLine className="left-[24%] top-[56%] w-[48%] -rotate-[18deg]" />
       <RouteLine className="left-[38%] top-[40%] w-[33%] rotate-[52deg]" />
@@ -112,8 +105,8 @@ function NetworkScene() {
       <div className="absolute left-1/2 top-1/2 w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-[#cfe0d1] bg-white/92 p-4 shadow-xl backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-leaf">Canlı ağ etkisi</p>
-            <h3 className="mt-1 text-xl font-semibold text-ink">80 kg domates kurtarılıyor</h3>
+            <p className="text-xs font-semibold uppercase text-leaf">Canlı etki</p>
+            <h3 className="mt-1 text-xl font-semibold text-ink">80 kg domates</h3>
           </div>
           <span className="rounded-md bg-[#ffe8e2] px-2 py-1 text-xs font-semibold text-clay">Acil</span>
         </div>
