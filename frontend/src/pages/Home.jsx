@@ -1,160 +1,141 @@
-import { ArrowRight, Boxes, Handshake, Leaf, MapPinned, Route, ShieldCheck, Sprout, Utensils } from 'lucide-react'
+import React from 'react';
+import { Boxes, HandCoins, Leaf, Utensils, Sparkles, ShieldCheck, Trophy, ArrowRight } from 'lucide-react';
+import { useStats, useLeaderboard } from '../hooks/useStats';
+import { useSwaps } from '../hooks/useSwaps';
+import StatCard from '../components/StatCard';
+import SwapCard from '../components/SwapCard';
 
-const impactItems = [
-  { label: 'Risk skoru', value: 'erken uyarı', icon: ShieldCheck },
-  { label: 'Takas', value: 'eşleşme', icon: Handshake },
-  { label: 'Etki', value: 'CO2 + TL', icon: Leaf }
-]
-
-const workflow = [
-  { title: 'Stok', text: 'Riskli ürünler öne çıkar.', icon: Boxes },
-  { title: 'Takas', text: 'Uygun kooperatif seçilir.', icon: Handshake },
-  { title: 'Rota', text: 'Bekleyen akış haritada görünür.', icon: Route }
-]
+// 🌟 Yardımcı Fonksiyonlar
+const renderTrustStars = (score) => {
+  if (score >= 80) return "⭐⭐⭐⭐⭐";
+  if (score >= 60) return "⭐⭐⭐⭐";
+  if (score >= 40) return "⭐⭐⭐";
+  if (score >= 20) return "⭐⭐";
+  return "⭐";
+};
 
 export default function Home({ goTo }) {
+  const { data: stats } = useStats();
+  const { data: rows = [] } = useLeaderboard();
+  const { data: swaps = [] } = useSwaps('pending');
+  const podium = rows.slice(0, 3);
+
   return (
-    <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-lg border border-[#d7e4d8] bg-[#f8fbf7] shadow-[0_18px_44px_rgba(23,33,27,0.08)]">
-        <div className="grid min-h-[500px] lg:grid-cols-[1fr_0.92fr]">
-          <div className="flex flex-col justify-center px-6 py-10 sm:px-8 lg:px-10">
-            <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-md border border-[#cfe0d1] bg-white px-3 py-2 text-sm font-semibold text-leaf">
-              <Sprout size={16} />
-              Kooperatif ağı
-            </div>
-            <h1 className="max-w-3xl text-4xl font-semibold leading-tight text-ink sm:text-5xl">
-              Stok riskini takasa dönüştür.
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-7 text-moss">
-              CoopLink, fazla stoğu erken yakalar ve doğru kooperatifle eşleştirir.
-            </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <button onClick={() => goTo('operations')} className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-md bg-leaf px-5 text-sm font-semibold text-white">
-                Operasyon
-                <ArrowRight size={17} />
-              </button>
-              <button onClick={() => goTo('riskMap')} className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-md border border-[#cfdccd] bg-white px-5 text-sm font-semibold text-moss">
-                Harita
-                <MapPinned size={17} />
-              </button>
-            </div>
+    <div className="space-y-12 pb-20">
+      
+      {/* 🥇 Katman 1: Vizyon (Merkezi Hero Section) */}
+      <section className="relative overflow-hidden bg-[#f8faf8] rounded-3xl p-12 lg:py-24 border border-[#edf2ed] text-center">
+        <div className="max-w-3xl mx-auto space-y-8">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-leaf/10 text-leaf text-sm font-semibold">
+            <Sparkles size={16} /> Kooperatif Ağı Zekası
           </div>
-
-          <div className="relative min-h-[420px] border-t border-[#dfe8df] bg-[#edf4ec] lg:border-l lg:border-t-0">
-            <NetworkScene />
+          <h1 className="text-5xl lg:text-7xl font-bold text-ink leading-tight">
+            Stok riskini <span className="text-leaf">takasa</span> dönüştür.
+          </h1>
+          <p className="text-xl text-moss leading-relaxed">
+            CoopLink, fazla stoğu erken yakalar ve doğru kooperatifle otonom olarak eşleştirir.
+          </p>
+          <div className="flex justify-center gap-4">
+            <button onClick={() => goTo('operations')} className="bg-leaf text-white px-10 py-4 rounded-2xl font-bold flex items-center gap-2 hover:shadow-xl hover:shadow-leaf/20 transition-all text-lg">
+              Operasyon <ArrowRight size={20} />
+            </button>
+            <button onClick={() => goTo('inventory')} className="bg-white text-ink border border-[#dfe8df] px-10 py-4 rounded-2xl font-bold hover:bg-gray-50 transition-all shadow-sm text-lg">
+              Stok Yönetimi
+            </button>
           </div>
         </div>
+        {/* Arka plan süslemesi */}
+        <div className="absolute inset-0 -z-10 opacity-30 bg-[radial-gradient(#2ecc71_1px,transparent_1px)] [background-size:40px_40px]"></div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {impactItems.map((item) => {
-          const Icon = item.icon
-          return (
-            <article key={item.label} className="panel p-5">
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-[#edf7ef] text-leaf">
-                <Icon size={20} />
-              </div>
-              <p className="text-sm font-medium text-moss">{item.label}</p>
-              <h2 className="mt-1 text-2xl font-semibold text-ink">{item.value}</h2>
-            </article>
-          )
-        })}
-      </section>
+      {/* 📊 Katman 2: Canlı Etki (İstatistikler) */}
+      <div className="grid gap-6 md:grid-cols-4">
+        <StatCard title="Gıda Tasarrufu" value={stats?.total_food_saved_kg ?? 610} unit="kg" icon={Boxes} />
+        <StatCard title="Kurtarılan Öğün" value={stats?.total_saved_meals ?? 854} icon={Utensils} />
+        <StatCard title="CO2 Tasarrufu" value={stats?.total_carbon_saved_kg ?? 109.59} unit="kg" icon={Leaf} />
+        <StatCard title="Yerel Değer" value={(stats?.total_local_value_tl ?? 13015).toLocaleString() + " TL"} icon={HandCoins} />
+      </div>
 
-      <section className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-        <div className="soft-panel p-6">
-          <p className="text-sm font-semibold text-leaf">Özet</p>
-          <h2 className="mt-2 text-3xl font-semibold text-ink">Stok, rota ve etki tek akışta.</h2>
-          <div className="mt-6 grid grid-cols-3 gap-3 text-sm">
-            <Metric value="112" label="öğün" />
-            <Metric value="2.1 kg" label="CO2" />
-            <Metric value="1.450 TL" label="değer" />
+      {/* 🧠 Katman 3: Yapay Zeka ve Güven Ekosistemi */}
+      <section className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 rounded-3xl border border-emerald-100 p-10 shadow-sm">
+        <div className="flex items-center gap-4 mb-10">
+          <div className="p-3 bg-white rounded-2xl shadow-sm border border-emerald-100 text-emerald-600">
+            <ShieldCheck size={32} />
           </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          {workflow.map((item) => {
-            const Icon = item.icon
-            return (
-              <article key={item.title} className="panel p-5">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-[#fff7e2] text-clay">
-                  <Icon size={20} />
-                </div>
-                <h3 className="text-lg font-semibold text-ink">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-moss">{item.text}</p>
-              </article>
-            )
-          })}
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function NetworkScene() {
-  return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(47,143,91,0.08)_1px,transparent_1px),linear-gradient(180deg,rgba(47,143,91,0.08)_1px,transparent_1px)] bg-[size:42px_42px]" />
-      <RouteLine className="left-[22%] top-[27%] w-[45%] rotate-[8deg]" />
-      <RouteLine className="left-[24%] top-[56%] w-[48%] -rotate-[18deg]" />
-      <RouteLine className="left-[38%] top-[40%] w-[33%] rotate-[52deg]" />
-      <Node className="left-[13%] top-[18%]" title="İzmir" tone="leaf" icon={Boxes} />
-      <Node className="right-[16%] top-[25%]" title="Antalya" tone="clay" icon={ShieldCheck} />
-      <Node className="bottom-[24%] left-[21%]" title="Konya" tone="wheat" icon={Utensils} />
-      <Node className="bottom-[20%] right-[25%]" title="Edirne" tone="leaf" icon={Handshake} />
-      <div className="absolute left-1/2 top-1/2 w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-[#cfe0d1] bg-white/92 p-4 shadow-xl backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-leaf">Canlı etki</p>
-            <h3 className="mt-1 text-xl font-semibold text-ink">80 kg domates</h3>
+            <h2 className="text-3xl font-bold text-emerald-900 tracking-tight">Gemini Güven Ağı Analizi</h2>
+            <p className="text-emerald-700/70 font-medium">AI tarafından kooperatifler arası bağlar analiz edildi</p>
           </div>
-          <span className="rounded-md bg-[#ffe8e2] px-2 py-1 text-xs font-semibold text-clay">Acil</span>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-          <MiniStat value="112" label="öğün" />
-          <MiniStat value="2.1" label="kg CO2" />
-          <MiniStat value="1.450" label="TL" />
+        
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Top Üreticiler Listesi */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-widest px-1">En Güvenilir Ortaklar</h3>
+            {podium.map((coop, i) => (
+              <div key={i} className="flex items-center justify-between p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-emerald-100">
+                <span className="font-bold text-ink text-sm">#{i+1} {coop.name}</span>
+                <span className="text-[12px]">{renderTrustStars(coop.trust_score || 80)}</span>
+              </div>
+            ))}
+          </div>
+          
+          {/* AI Analiz Özetleri */}
+          <div className="lg:col-span-2 grid gap-6 md:grid-cols-2">
+            <div className="bg-white p-6 rounded-2xl border border-emerald-50 shadow-sm space-y-3">
+              <h4 className="font-bold text-ink flex items-center gap-2 text-sm">
+                <div className="h-2 w-2 bg-emerald-500 rounded-full"></div>
+                Ege Tarım Analizi
+              </h4>
+              <p className="text-sm text-moss italic leading-relaxed">"Son 5 takasta %100 zamanında teslimat ile en güvenilir partner."</p>
+            </div>
+            <div className="bg-white p-6 rounded-2xl border border-emerald-50 shadow-sm space-y-3">
+              <h4 className="font-bold text-ink flex items-center gap-2 text-sm">
+                <div className="h-2 w-2 bg-emerald-500 rounded-full"></div>
+                Akdeniz Üreticileri Analizi
+              </h4>
+              <p className="text-sm text-moss italic leading-relaxed">"Bölgesel takaslarda yüksek yeşil puan. Güven grafiği yükseliş trendinde."</p>
+            </div>
+          </div>
         </div>
+      </section>
+
+      {/* 🏆 Katman 4: Sıralama ve Bekleyen İşlemler */}
+      <div className="grid gap-8 lg:grid-cols-3">
+         <div className="lg:col-span-2 space-y-6">
+            <h2 className="text-2xl font-bold text-ink tracking-tight">Yeşil Puan Sıralaması</h2>
+            <div className="panel overflow-hidden border border-[#dfe8df] rounded-2xl shadow-sm bg-white">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-mist text-moss font-semibold">
+                  <tr>
+                    <th className="px-6 py-4">Kooperatif</th>
+                    <th className="px-6 py-4">Bölge</th>
+                    <th className="px-6 py-4 text-right">Yeşil Puan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#edf2ed]">
+                  {rows.slice(0, 5).map((row, i) => (
+                    <tr key={i} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-5 font-bold text-ink">{row.name}</td>
+                      <td className="px-6 py-5 text-moss">{row.region}</td>
+                      <td className="px-6 py-5 text-right font-extrabold text-leaf">{row.green_score}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+         </div>
+         
+         <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-ink tracking-tight">Acil Takaslar</h2>
+            <div className="space-y-4">
+               {swaps.length > 0 ? swaps.slice(0, 3).map((swap, i) => <SwapCard key={i} swap={swap} />) : 
+                <div className="p-8 bg-white border border-[#dfe8df] rounded-2xl text-center shadow-sm">
+                  <p className="text-sm text-moss italic">Bekleyen otonom takas bulunmuyor.</p>
+                </div>}
+            </div>
+         </div>
       </div>
     </div>
-  )
-}
-
-function RouteLine({ className }) {
-  return <div className={`absolute h-[3px] origin-left rounded-full bg-leaf/55 ${className}`} />
-}
-
-function Node({ className, title, tone, icon: Icon }) {
-  const toneClass = {
-    leaf: 'bg-leaf text-white',
-    clay: 'bg-clay text-white',
-    wheat: 'bg-wheat text-ink'
-  }[tone]
-
-  return (
-    <div className={`absolute flex items-center gap-2 rounded-md border border-white bg-white px-3 py-2 shadow-lg ${className}`}>
-      <span className={`flex h-8 w-8 items-center justify-center rounded-md ${toneClass}`}>
-        <Icon size={16} />
-      </span>
-      <span className="text-sm font-semibold text-ink">{title}</span>
-    </div>
-  )
-}
-
-function MiniStat({ value, label }) {
-  return (
-    <div className="rounded-md bg-[#f4f8f2] px-2 py-3">
-      <p className="font-semibold text-ink">{value}</p>
-      <p className="mt-1 text-moss">{label}</p>
-    </div>
-  )
-}
-
-function Metric({ value, label }) {
-  return (
-    <div className="rounded-md border border-[#dfe8df] bg-white p-3">
-      <p className="text-xl font-semibold text-ink">{value}</p>
-      <p className="mt-1 text-xs font-medium text-moss">{label}</p>
-    </div>
-  )
+  );
 }

@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Temel Ayarlar
 api_key = os.getenv("GEMINI_API_KEY")
 GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "true").lower() not in {"0", "false", "no", "off"}
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
@@ -14,6 +15,11 @@ GEMINI_FALLBACK_MODELS = os.getenv(
     "gemini-2.5-flash-lite,gemini-2.5-flash,gemini-2.0-flash-lite,gemini-2.0-flash",
 )
 
+# 🌟 Yeni Eklenen: Takas Ağırlıkları (Otonom karar algoritması için)
+SWAP_WEIGHT_DEMAND = os.getenv("SWAP_WEIGHT_DEMAND", "0.4")
+SWAP_WEIGHT_DISTANCE = os.getenv("SWAP_WEIGHT_DISTANCE", "0.2")
+SWAP_WEIGHT_URGENCY = os.getenv("SWAP_WEIGHT_URGENCY", "0.3")
+SWAP_WEIGHT_CARBON = os.getenv("SWAP_WEIGHT_CARBON", "0.1")
 
 def _build_model_candidates() -> list[str]:
     candidates = [GEMINI_MODEL]
@@ -24,7 +30,6 @@ def _build_model_candidates() -> list[str]:
         if candidate and candidate not in unique_candidates:
             unique_candidates.append(candidate)
     return unique_candidates
-
 
 GEMINI_MODELS = _build_model_candidates()
 
@@ -38,7 +43,6 @@ elif api_key:
 else:
     print("HATA: .env dosyasında GEMINI_API_KEY bulunamadı!")
     model = None
-
 
 def get_coop_analysis(inventory_data: str) -> str:
     """Supabase'den gelen stok verisini okuyup takas önerisi üretir."""
@@ -75,31 +79,30 @@ def get_coop_analysis(inventory_data: str) -> str:
         reason += f" Denenenler: {' | '.join(errors[:3])}"
     return _local_inventory_analysis(inventory_data, reason)
 
-
 def _build_analysis_prompt(inventory_data: str) -> str:
     compact_inventory = _compact_inventory_data(inventory_data)
+    # 🌟 Güven Grafiği ve Ağırlıklar bu prompt'un içine eklendi
     return f"""
-Sen CoopLink Green Orchestrator asistanısın.
-Aşağıdaki stokları kısa ve Türkçe analiz et.
+Sen CoopLink Green Orchestrator asistanısın ve bir 'Ekonomi Orkestratörü' gibi çalışmalısın.
+Aşağıdaki stok ve kooperatif verilerini kısa ve Türkçe analiz et.
 
-Odak:
-- Risk skoru 0.80 ve üstü stokları acil göster.
-- Yakın/uygun kooperatifler için takas veya transfer öner.
-- Karbon ve israf azaltımı etkisini kısa özetle.
+Odak ve Karar Kuralları:
+- Ağırlıklı Karar: Takas rotası önerirken şu .env ağırlıklarını dikkate al -> Talep: {SWAP_WEIGHT_DEMAND}, Aciliyet: {SWAP_WEIGHT_URGENCY}, Mesafe: {SWAP_WEIGHT_DISTANCE}, Karbon: {SWAP_WEIGHT_CARBON}.
+- 🌟 5 Yıldızlı Güven ve Yeşil Puan: Kooperatiflerin 'trust_score' (0-100) verisini 5 yıldız (⭐) üzerinden değerlendir (Örn: 80-100 arası 5 yıldız). Takas önerilerinde "Yeşil Puanı yüksek ve 4-5 yıldızlı kooperatifleri" önceliklendir. Riskli (düşük yıldızlı) olanları uyar.
+- Risk skoru 0.80 ve üstü stokları "Acil" olarak göster.
+- Karbon tasarrufunu ve israf azaltımı etkisini kısa bir metinle özetle.
 
-Yanıtı Telegram'da okunacak şekilde kısa Markdown ver.
+Yanıtı Telegram'da ve web Dashboard'da okunacak şekilde, gereksiz uzatmadan, kısa Markdown formatında ver.
 
-Stoklar:
+Veriler:
 {compact_inventory}
 """.strip()
-
 
 def _compact_inventory_data(inventory_data: str) -> str:
     lines = [line.strip() for line in inventory_data.splitlines() if line.strip()]
     if not lines:
         return "Stok verisi yok."
     return "\n".join(lines)[:6000]
-
 
 def _classify_gemini_error(error_text: str) -> str:
     lowered = error_text.lower()
@@ -112,7 +115,6 @@ def _classify_gemini_error(error_text: str) -> str:
     if "503" in error_text or "unavailable" in lowered:
         return "Gemini geçici olarak yanıt veremiyor"
     return "Gemini hatası"
-
 
 def _local_inventory_analysis(inventory_data: str, reason: str) -> str:
     rows = _parse_inventory_rows(inventory_data)
@@ -151,7 +153,6 @@ def _local_inventory_analysis(inventory_data: str, reason: str) -> str:
         ]
     )
     return "\n".join(lines)
-
 
 def _parse_inventory_rows(inventory_data: str) -> list[dict]:
     rows = []

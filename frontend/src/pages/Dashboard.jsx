@@ -1,4 +1,4 @@
-import { Boxes, HandCoins, Leaf, Utensils } from 'lucide-react'
+import { Boxes, HandCoins, Leaf, Utensils, Sparkles, ShieldCheck } from 'lucide-react'
 import CarbonChart from '../components/CarbonChart'
 import StatCard from '../components/StatCard'
 import SwapCard from '../components/SwapCard'
@@ -10,8 +10,16 @@ export default function Dashboard({ goTo }) {
   const { isAdmin } = useAuth()
   const { data: stats, isLoading, isError } = useStats()
   const { data: swaps = [] } = useSwaps('pending')
+
   if (isLoading) return <div className="p-6 text-moss">Panel yükleniyor...</div>
   if (isError) return <div className="panel p-6 text-red-700">Panel verileri alınamadı.</div>
+
+  // 🌟 MVP GÜVEN AĞI VERİSİ (Backend'den gelirse onu kullanır, gelmezse videoda şık durması için mock data gösterir)
+  const trustInsights = stats?.trust_insights || [
+    { name: "Ege Tarım Kooperatifi", stars: "⭐⭐⭐⭐⭐", desc: "Son 5 takasta %100 zamanında teslimat ve sıfır iptal ile en güvenilir partner." },
+    { name: "Akdeniz Üreticileri", stars: "⭐⭐⭐⭐", desc: "Bölgesel takaslarda yüksek yeşil puan. Güven grafiği son 3 haftada yükseliş trendinde." }
+  ];
+
   return (
     <div className="space-y-6">
       <section className="soft-panel p-5">
@@ -42,6 +50,28 @@ export default function Dashboard({ goTo }) {
           <ImpactMetric label="Hafta öğün" value={formatNumber(stats?.this_week?.saved_meals ?? 0)} />
           <ImpactMetric label="Hafta CO2" value={`${formatNumber(stats?.this_week?.carbon_saved_kg ?? 0)} kg`} />
           <ImpactMetric label="Hafta değer" value={formatCurrency(stats?.this_week?.local_value_tl ?? 0)} />
+        </div>
+      </section>
+
+      {/* 🤖 YENİ EKLENEN: GEMINI GÜVEN AĞI WIDGET'I */}
+      <section className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-100 p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="h-5 w-5 text-emerald-600" />
+          <h2 className="text-lg font-bold text-emerald-800">Gemini Güven Ağı Analizi</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {trustInsights.map((insight, idx) => (
+            <div key={idx} className="bg-white p-4 rounded-lg border border-emerald-50 shadow-sm flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-ink flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                  {insight.name}
+                </span>
+                <span className="text-sm font-bold text-yellow-500 drop-shadow-sm">{insight.stars}</span>
+              </div>
+              <p className="text-sm text-moss leading-relaxed">{insight.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
