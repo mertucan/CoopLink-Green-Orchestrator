@@ -10,6 +10,8 @@ from app.services.supabase_client import get_supabase_client
 
 load_dotenv()
 
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
 SYSTEM_PROMPT = (
     "Sen CoopLink - Green Orchestrator asistanısın. Tarım ve gıda kooperatifleri ağını yönetir, "
     "stok, takas ve teslimat sorularına kısa ve Türkçe yanıt verirsin."
@@ -77,7 +79,7 @@ class Orchestrator:
                 used_gemini = gemini_result["used_gemini"]
                 fallback_used = gemini_result["fallback_used"]
                 gemini_response = gemini_result["raw_response"]
-                model_name = "gemini-1.5-flash" if used_gemini else "local-intent-fallback"
+                model_name = GEMINI_MODEL if used_gemini else "local-intent-fallback"
 
             if intent == "propose_swap":
                 result = await self.swap_agent.propose_swap(extract_product(message), extract_quantity(message))
@@ -122,7 +124,7 @@ class Orchestrator:
                 import google.generativeai as genai
 
                 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-                model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=SYSTEM_PROMPT)
+                model = genai.GenerativeModel(GEMINI_MODEL, system_instruction=SYSTEM_PROMPT)
                 prompt = f"Mesaj için intent seç: query_stock, propose_swap, track_delivery. Sadece intent yaz.\nMesaj: {message}"
                 response = await asyncio.to_thread(model.generate_content, prompt)
                 candidate = response.text.strip()

@@ -48,6 +48,8 @@ export default function SwapCard({ swap }) {
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div>Skor: <strong>{Number(swap.match_score || 0).toFixed(2)}</strong></div>
         <div>CO2: <strong>{Number(swap.carbon_saved_kg || 0).toFixed(1)} kg</strong></div>
+        <div>Öğün: <strong>{Number(swap.saved_meals || 0).toLocaleString('tr-TR')}</strong></div>
+        <div>Değer: <strong>{Number(swap.local_value_tl || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL</strong></div>
       </div>
       {pending && (
         <div className="mt-4 flex gap-2">

@@ -3,17 +3,20 @@ import Navbar from './components/Navbar'
 import { ToastProvider } from './components/ToastProvider'
 import Dashboard from './pages/Dashboard'
 import AiLogs from './pages/AiLogs'
+import Home from './pages/Home'
 import Inventory from './pages/Inventory'
 import Leaderboard from './pages/Leaderboard'
 import Operations from './pages/Operations'
+import RiskMap from './pages/RiskMap'
 import Swaps from './pages/Swaps'
 
 const routes = {
-  '/': 'dashboard',
+  '/': 'home',
   '/dashboard': 'dashboard',
   '/operations': 'operations',
   '/ai-logs': 'aiLogs',
   '/inventory': 'inventory',
+  '/risk-map': 'riskMap',
   '/swaps': 'swaps',
   '/leaderboard': 'leaderboard'
 }
@@ -21,7 +24,7 @@ const routes = {
 const paths = Object.fromEntries(Object.entries(routes).map(([path, page]) => [page, path]))
 
 function pageFromLocation() {
-  return routes[window.location.pathname] || 'dashboard'
+  return routes[window.location.pathname] || 'home'
 }
 
 export default function App() {
@@ -42,10 +45,12 @@ export default function App() {
   }
 
   const pages = useMemo(() => ({
+    home: <Home goTo={navigate} />,
     dashboard: <Dashboard goTo={navigate} />,
     operations: <Operations goTo={navigate} />,
     aiLogs: <AiLogs />,
     inventory: <Inventory goTo={navigate} />,
+    riskMap: <RiskMap goTo={navigate} />,
     swaps: <Swaps />,
     leaderboard: <Leaderboard />
   }), [])

@@ -1,4 +1,12 @@
-export default function RiskBadge({ value = 0 }) {
+export default function RiskBadge({ value = 0, expired = false }) {
+  if (expired) {
+    return (
+      <span className="inline-flex min-w-24 items-center justify-center rounded-md border border-red-300 bg-red-200 px-2 py-1 text-xs font-semibold text-red-800">
+        Süresi geçti
+      </span>
+    )
+  }
+
   const risk = Number(value)
   const config =
     risk >= 0.7
@@ -12,4 +20,3 @@ export default function RiskBadge({ value = 0 }) {
     </span>
   )
 }
-

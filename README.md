@@ -54,7 +54,9 @@ flowchart LR
 Backend:
 - FastAPI, Uvicorn
 - Supabase PostgreSQL
-- Gemini 1.5 Flash için orchestrator katmanı
+- Gemini 2.0 Flash için orchestrator katmanı
+- Gemini kotası dolarsa yerel analiz fallback'i
+- Telegram CooBot operasyon menüsü
 - Pytest ve pytest-asyncio
 
 Frontend:
@@ -62,6 +64,7 @@ Frontend:
 - TailwindCSS
 - React Query
 - Recharts
+- Leaflet ve React Leaflet
 - Axios
 
 ## Kurulum
@@ -186,14 +189,30 @@ npm run dev
 
 Frontend açılınca:
 
-- Admin panel: http://localhost:5173
+- Ana sayfa: http://localhost:5173
+- Admin panel: http://localhost:5173/dashboard
 - Operasyon merkezi: http://localhost:5173/operations
 - Stok ekranı: http://localhost:5173/inventory
+- Risk haritası: http://localhost:5173/risk-map
 - Takas ekranı: http://localhost:5173/swaps
 - AI logları: http://localhost:5173/ai-logs
 - Leaderboard: http://localhost:5173/leaderboard
 
-### 6. Hızlı test
+### 6. Telegram botunu çalıştır
+
+`.env` içine `TELEGRAM_BOT_TOKEN` değerini ekle. Botu sadece belirli kullanıcıların kullanmasını istiyorsan `TELEGRAM_ADMIN_ID` alanına Telegram kullanıcı id'lerini virgülle ayırarak yazabilirsin. Stok ekleme butonunun kullanacağı varsayılan kooperatif için `TELEGRAM_DEFAULT_COOPERATIVE_ID` doldurulabilir. AI analiz için varsayılan model `GEMINI_MODEL=gemini-2.0-flash` değeridir.
+
+```powershell
+cd backend
+.\.venv\Scripts\activate
+python -m app.services.telegram_service
+```
+
+CooBot üzerinden `/start` veya `/menu` yazınca önce tanıtım mesajı ve `Başla` butonu görünür. `Başla` sonrasında operasyon menüsü açılır. Butonlarla stok listesi, riskli stok takas önerisi, bekleyen takas onay/red, AI analiz, stok ekleme ve müşteri özeti üretilebilir. Telegram mesajları ve buton aksiyonları AI Logs ekranına `telegram:<chat_id>` kanalıyla kaydedilir.
+
+AI analiz butonu Gemini'den yanıt alamazsa, örneğin kota veya rate limit hatasında, kullanıcıya ham hata metni göstermek yerine stok verilerinden yerel analiz üretir.
+
+### 7. Hızlı test
 
 Backend çalışırken Orchestrator'a test mesajı göndermek için:
 
@@ -216,6 +235,7 @@ http://localhost:5173/ai-logs
 - `npm is not recognized`: Node.js kurulmamıştır.
 - Frontend veri çekemiyor: Backend'in `http://localhost:8000` üzerinde çalıştığını kontrol et.
 - Supabase hatası alıyorsan: `.env` değerlerini kontrol et veya demo fallback modu için Supabase alanlarını placeholder bırak.
+- Gemini 429/kota hatası: Google AI Studio projesinde billing veya aktif kota olmayabilir. Bot ve panel bu durumda yerel analiz fallback'i ile çalışmaya devam eder.
 
 ## API Dokümantasyonu
 
@@ -234,20 +254,56 @@ http://localhost:5173/ai-logs
 | `/stats/leaderboard` | GET | Yeşil puana göre kooperatif sıralaması |
 | `/docs` | GET | Otomatik OpenAPI dokümantasyonu |
 
+## Operasyon Mantığı
+
+### Stok, Takas ve Son Kullanma Akışı
+
+- Bir stok için takas önerisi oluşturulduğunda ürün stok listesinden hemen düşmez. Stok satırı listede kalır ve `Takas bekliyor` olarak işaretlenir.
+- Aynı kooperatif ve ürün için açık bir bekleyen takas varsa yeni kopya öneri oluşturulmaz; mevcut öneri yeniden kullanılır.
+- Takas reddedilirse stokta herhangi bir düşüm yapılmaz; ürün stokta kalmaya devam eder.
+- Takas onaylanırsa ilgili ürün miktarı stoktan düşülür, karbon logu yazılır ve yeşil puan güncellenir.
+- Son kullanma tarihi geçmiş ürünler takasa önerilemez. Bu ürünler stok ekranında `Süresi geçti` olarak görünür ve ayrı operasyon aksiyonu gerektirir.
+
+### Kurtarılan Değer Skoru
+
+Onaylanan takaslarda sistem yalnızca karbonu değil, sosyal ve ekonomik etkiyi de hesaplar:
+
+```text
+80 kg domates, 112 öğün, 2.1 kg CO2 ve 1.450 TL yerel değer kurtarıldı.
+```
+
+Bu değerler mevcut `swaps`, `products` ve `inventory` verilerinden hesaplanır. Demo modunda ürün/kategori bazlı yaklaşık TL/kg değerleri backend içindeki etki motorundan gelir; ileride bu değerler `products.avg_price_tl_per_kg` gibi bir veritabanı kolonuna taşınabilir.
+
+### Risk Haritası ve Rota Mantığı
+
+`/risk-map` sayfası Supabase verilerini kullanır:
+
+- Risk noktaları `inventory` tablosundaki stoklardan gelir.
+- İl ve kooperatif konumları `cooperatives.latitude` ve `cooperatives.longitude` alanlarından gelir.
+- Rota çizgileri `swaps` tablosunda `status = pending` olan bekleyen takaslardan üretilir.
+- Her rota `from_cooperative_id -> to_cooperative_id` akışını gösterir.
+- Rota çizgisi gerçek karayolu navigasyonu değil, önerilen takas/lojistik bağlantısını gösteren operasyon çizgisidir.
+- Aynı iki kooperatif arasında birden fazla rota varsa çizgiler hafif kavislenerek üst üste binmeleri azaltılır.
+- 81 il sınırı yerel GeoJSON dosyasıyla çizilir; her il tıklanabilir ve kooperatif olan iller daha belirgin gösterilir.
+
 ## Frontend Rotaları
 
 | Rota | Ekran |
 | --- | --- |
-| `/` veya `/dashboard` | Ana yönetim paneli |
+| `/` | CoopLink ana karşılama ve tanıtım sayfası |
+| `/dashboard` | Ana yönetim paneli |
 | `/operations` | Admin operasyon merkezi |
 | `/ai-logs` | Gemini ve Orchestrator karar logları |
 | `/inventory` | Stok ve risk takibi |
+| `/risk-map` | Türkiye risk ısı haritası ve takas rotaları |
 | `/swaps` | Takas onay/red yönetimi |
 | `/leaderboard` | Yeşil puan sıralaması |
 
 ## Gemini Buton Kullanımı
 
-Stok ekranındaki `Gemini Analiz` butonu, seçili stok satırını doğal dil mesajına çevirip `/assistant/message` endpoint'ine gönderir. Backend bu mesajı Orchestrator'a iletir. `.env` içinde geçerli `GEMINI_API_KEY` varsa Gemini intent seçiminde devreye girer; sonuç toast mesajı olarak görünür ve `/ai-logs` ekranına kaydedilir.
+Stok ekranındaki `Gemini Analiz` butonu, seçili stok satırını doğal dil mesajına çevirip `/assistant/message` endpoint'ine gönderir. Backend bu mesajı Orchestrator'a iletir. `.env` içinde geçerli `GEMINI_API_KEY` varsa Gemini intent seçiminde devreye girer; sonuç sağ altta toast mesajı olarak görünür ve `/ai-logs` ekranına kaydedilir.
+
+AI Logs ekranında kayıtlar mesaj/yanıt/model metnine göre aranabilir; Gemini kullanılanlar, fallback kayıtları, Telegram kayıtları ve intent tipleri ayrı filtrelenebilir.
 
 Örnek üretilen mesaj:
 
