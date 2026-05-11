@@ -1,11 +1,13 @@
 import os
 import asyncio
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.agents.stock_agent import calculate_risk
 from app.models.inventory import InventoryCreate
+from app.services.auth_service import get_current_user
 from app.services.impact_engine import build_loss_projection
+from app.services.inventory_lifecycle import process_expired_inventory
 from app.services.supabase_client import get_supabase_client
 
 # Bizim bildirim servisini dahil ediyoruz
@@ -17,6 +19,7 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 @router.get("")
 async def list_inventory(cooperative_id: str | None = Query(default=None)):
     supabase = get_supabase_client()
+    process_expired_inventory(supabase)
     query = supabase.table("inventory").select("*")
     if cooperative_id:
         query = query.eq("cooperative_id", cooperative_id)
@@ -39,6 +42,7 @@ async def list_inventory(cooperative_id: str | None = Query(default=None)):
         now = datetime.now(timezone.utc)
         hours_until_expiry = round((expires_at - now).total_seconds() / 3600, 1) if expires_at else None
         is_expired = hours_until_expiry is not None and hours_until_expiry <= 0
+        is_disposed = item.get("disposal_status") == "disposed" or bool(item.get("disposed_at"))
         pending_swap = pending_map.get((item.get("cooperative_id"), item.get("product_id")))
         enriched.append(
             {
@@ -49,8 +53,9 @@ async def list_inventory(cooperative_id: str | None = Query(default=None)):
                 "cooperative_name": cooperative.get("name", item.get("cooperative_id")),
                 "cooperative_region": cooperative.get("region", ""),
                 "is_expired": is_expired,
+                "is_disposed": is_disposed,
                 "hours_until_expiry": hours_until_expiry,
-                "expiry_status": "expired" if is_expired else "active",
+                "expiry_status": "disposed" if is_disposed else "expired" if is_expired else "active",
                 "has_pending_swap": pending_swap is not None,
                 "pending_swap_id": pending_swap.get("id") if pending_swap else None,
                 "reserved_quantity_kg": float(pending_swap.get("quantity_kg", 0)) if pending_swap else 0,
@@ -61,8 +66,10 @@ async def list_inventory(cooperative_id: str | None = Query(default=None)):
 
 
 @router.post("")
-async def create_inventory(item: InventoryCreate):
+async def create_inventory(item: InventoryCreate, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
+    if user.get("role") == "cooperative" and item.cooperative_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Sadece kendi kooperatifiniz icin stok ekleyebilirsiniz.")
     product_rows = supabase.table("products").select("*").eq("id", item.product_id).limit(1).execute().data
     if not product_rows:
         raise HTTPException(status_code=404, detail="Ürün bulunamadı.")

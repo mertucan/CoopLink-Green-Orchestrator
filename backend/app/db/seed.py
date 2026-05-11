@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from random import Random
 
 from app.agents.stock_agent import calculate_risk
+from app.services.auth_service import hash_password
 from app.services.supabase_client import get_supabase_client
 
 COOPERATIVES = [
@@ -28,8 +29,26 @@ def seed() -> None:
     product_rows = []
 
     for idx, coop in enumerate(COOPERATIVES, start=1):
-        row = {"id": f"00000000-0000-0000-0000-00000000010{idx}", **coop}
+        row = {
+            "id": f"00000000-0000-0000-0000-00000000010{idx}",
+            "role": "cooperative",
+            "password_hash": hash_password("demo123"),
+            **coop,
+        }
         coop_rows.append(row)
+    coop_rows.append(
+        {
+            "id": "00000000-0000-0000-0000-000000000199",
+            "name": "CoopLink Admin",
+            "region": "Merkez",
+            "contact_phone": "+905321119999",
+            "role": "admin",
+            "password_hash": hash_password("admin123"),
+            "green_score": 0,
+            "latitude": 39.0,
+            "longitude": 35.0,
+        }
+    )
     for idx, (name, category, spoilage) in enumerate(PRODUCTS, start=1):
         product_rows.append(
             {

@@ -1,37 +1,51 @@
 from datetime import datetime, timezone
 from uuid import uuid4
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.swap import SwapUpdate
 from app.agents.swap_agent import calculate_match_score, haversine_km
 from app.services.carbon_engine import calculate_carbon_saving, calculate_green_points
+from app.services.auth_service import get_current_user, get_optional_user
 from app.services.impact_engine import build_impact_summary
+from app.services.inventory_lifecycle import process_expired_inventory
 from app.services.supabase_client import get_supabase_client
 
 router = APIRouter(prefix="/swaps", tags=["swaps"])
 
 
 @router.get("")
-async def list_swaps(status: str | None = None):
+async def list_swaps(status: str | None = None, user: dict | None = Depends(get_optional_user)):
     supabase = get_supabase_client()
     query = supabase.table("swaps").select("*")
     if status:
         query = query.eq("status", status)
-    return {"items": _enrich_swaps(supabase, query.execute().data or [])}
+    rows = query.execute().data or []
+    if user and user.get("role") == "cooperative":
+        rows = [
+            row
+            for row in rows
+            if row.get("from_cooperative_id") == user["id"] or row.get("to_cooperative_id") == user["id"]
+        ]
+    return {"items": _enrich_swaps(supabase, rows)}
 
 
 @router.post("/propose")
-async def propose_swap(payload: dict):
+async def propose_swap(payload: dict, user: dict = Depends(get_current_user)):
     inventory_id = payload.get("inventory_id")
     if not inventory_id:
         raise HTTPException(status_code=400, detail="Envanter kaydı seçilmedi.")
 
     supabase = get_supabase_client()
+    process_expired_inventory(supabase)
     inventory_rows = supabase.table("inventory").select("*").eq("id", inventory_id).limit(1).execute().data or []
     if not inventory_rows:
         raise HTTPException(status_code=404, detail="Envanter kaydı bulunamadı.")
 
     item = inventory_rows[0]
+    if item.get("disposal_status") == "disposed" or item.get("disposed_at") or float(item.get("quantity_kg", 0)) <= 0:
+        raise HTTPException(status_code=400, detail="Bu stok imha edildiği için takas önerisi oluşturulamaz.")
+    if user.get("role") == "cooperative" and item.get("cooperative_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Sadece kendi stoklarınız için takas önerebilirsiniz.")
     expires_at = datetime.fromisoformat(str(item["expires_at"]).replace("Z", "+00:00"))
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -52,7 +66,7 @@ async def propose_swap(payload: dict):
     if existing_pending:
         return {"item": _enrich_swaps(supabase, existing_pending)[0], "reused": True}
 
-    cooperatives = supabase.table("cooperatives").select("*").execute().data or []
+    cooperatives = supabase.table("cooperatives").select("*").eq("role", "cooperative").execute().data or []
     source = next((coop for coop in cooperatives if coop.get("id") == item.get("cooperative_id")), None)
     candidates = [coop for coop in cooperatives if coop.get("id") != item.get("cooperative_id")]
     if not source or not candidates:
@@ -89,11 +103,16 @@ async def propose_swap(payload: dict):
 
 
 @router.patch("/{swap_id}")
-async def update_swap(swap_id: str, update: SwapUpdate):
+async def update_swap(swap_id: str, update: SwapUpdate, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     existing_rows = supabase.table("swaps").select("*").eq("id", swap_id).limit(1).execute().data or []
     if not existing_rows:
         raise HTTPException(status_code=404, detail="Takas bulunamadı.")
+    if user.get("role") == "cooperative" and user["id"] not in {
+        existing_rows[0].get("from_cooperative_id"),
+        existing_rows[0].get("to_cooperative_id"),
+    }:
+        raise HTTPException(status_code=403, detail="Bu takası güncelleme yetkiniz yok.")
     previous_status = existing_rows[0].get("status")
     payload = {"status": update.status.value}
     if update.status.value in {"approved", "rejected"}:

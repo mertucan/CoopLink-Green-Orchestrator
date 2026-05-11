@@ -16,6 +16,40 @@ ON CONFLICT (id) DO UPDATE SET
   latitude = EXCLUDED.latitude,
   longitude = EXCLUDED.longitude;
 
+UPDATE cooperatives
+SET
+  role = 'cooperative',
+  password_hash = COALESCE(password_hash, 'pbkdf2_sha256$120000$qWaO7CkIv4kIUsE63x6fUg$0ejg0imD4PfmWzEi9mQzaQN_08BWL1WkY0tN3aEbWbg')
+WHERE id IN (
+  '00000000-0000-0000-0000-000000000101',
+  '00000000-0000-0000-0000-000000000102',
+  '00000000-0000-0000-0000-000000000103',
+  '00000000-0000-0000-0000-000000000104',
+  '00000000-0000-0000-0000-000000000105'
+);
+
+INSERT INTO cooperatives (id, name, region, contact_phone, role, password_hash, green_score, latitude, longitude)
+VALUES (
+  '00000000-0000-0000-0000-000000000199',
+  'CoopLink Admin',
+  'Merkez',
+  '+905321119999',
+  'admin',
+  'pbkdf2_sha256$120000$suzcYPG5LfXY29vd6z4FkA$Dzn723p6fF8TqdDF5IP6lqD4GtBQEmpook3ZwpxveXE',
+  0,
+  39.0000,
+  35.0000
+)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  region = EXCLUDED.region,
+  contact_phone = EXCLUDED.contact_phone,
+  role = EXCLUDED.role,
+  password_hash = EXCLUDED.password_hash,
+  green_score = EXCLUDED.green_score,
+  latitude = EXCLUDED.latitude,
+  longitude = EXCLUDED.longitude;
+
 INSERT INTO products (id, name, category, spoilage_rate_days)
 VALUES
   ('00000000-0000-0000-0000-000000000201', 'domates', 'sebze', 5),

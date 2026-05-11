@@ -1,4 +1,12 @@
-export default function RiskBadge({ value = 0, expired = false }) {
+export default function RiskBadge({ value = 0, expired = false, disposed = false }) {
+  if (disposed) {
+    return (
+      <span className="inline-flex min-w-24 items-center justify-center rounded-md border border-stone-300 bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-700">
+        İmha edildi
+      </span>
+    )
+  }
+
   if (expired) {
     return (
       <span className="inline-flex min-w-24 items-center justify-center rounded-md border border-red-300 bg-red-200 px-2 py-1 text-xs font-semibold text-red-800">

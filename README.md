@@ -54,9 +54,10 @@ flowchart LR
 Backend:
 - FastAPI, Uvicorn
 - Supabase PostgreSQL
-- Gemini 2.0 Flash için orchestrator katmanı
+- Güncel Gemini modelleri için orchestrator katmanı
 - Gemini kotası dolarsa yerel analiz fallback'i
 - Telegram CooBot operasyon menüsü
+- Son kullanma tarihi geçen stokları otomatik imha eden ve kooperatife yeşil puan cezası yazan stok yaşam döngüsü servisi
 - Pytest ve pytest-asyncio
 
 Frontend:
@@ -148,6 +149,12 @@ Daha önce eski şemayı çalıştırdıysan ve kolon isimleri farklıysa şu mi
 backend/app/db/remove_twilio_migration.sql
 ```
 
+Süresi geçen stokların imha durumunu ve puan cezasını kaydetmek için şu migration dosyasını da bir kez çalıştır:
+
+```bash
+backend/app/db/expired_inventory_migration.sql
+```
+
 Supabase kullanmıyorsan bu adımı atlayabilirsin.
 
 ### 4. Backend'i çalıştır
@@ -200,7 +207,7 @@ Frontend açılınca:
 
 ### 6. Telegram botunu çalıştır
 
-`.env` içine `TELEGRAM_BOT_TOKEN` değerini ekle. Botu sadece belirli kullanıcıların kullanmasını istiyorsan `TELEGRAM_ADMIN_ID` alanına Telegram kullanıcı id'lerini virgülle ayırarak yazabilirsin. Stok ekleme butonunun kullanacağı varsayılan kooperatif için `TELEGRAM_DEFAULT_COOPERATIVE_ID` doldurulabilir. AI analiz için varsayılan model `GEMINI_MODEL=gemini-2.0-flash` değeridir.
+`.env` içine `TELEGRAM_BOT_TOKEN` değerini ekle. Botu sadece belirli kullanıcıların kullanmasını istiyorsan `TELEGRAM_ADMIN_ID` alanına Telegram kullanıcı id'lerini virgülle ayırarak yazabilirsin. Stok ekleme butonu önce kooperatif seçtirir, sonra `ürün miktar gün` formatıyla stoku seçilen kooperatife ekler. AI analiz için varsayılan model `GEMINI_MODEL=gemini-3.1-flash-lite` değeridir.
 
 ```powershell
 cd backend
@@ -211,6 +218,22 @@ python -m app.services.telegram_service
 CooBot üzerinden `/start` veya `/menu` yazınca önce tanıtım mesajı ve `Başla` butonu görünür. `Başla` sonrasında operasyon menüsü açılır. Butonlarla stok listesi, riskli stok takas önerisi, bekleyen takas onay/red, AI analiz, stok ekleme ve müşteri özeti üretilebilir. Telegram mesajları ve buton aksiyonları AI Logs ekranına `telegram:<chat_id>` kanalıyla kaydedilir.
 
 AI analiz butonu Gemini'den yanıt alamazsa, örneğin kota veya rate limit hatasında, kullanıcıya ham hata metni göstermek yerine stok verilerinden yerel analiz üretir.
+
+### Stok imha kuralı
+
+Sistem stok, takas, istatistik veya Telegram stok ekranına erişildiğinde son kullanma tarihi geçmiş ve miktarı pozitif olan kayıtları otomatik imha eder. İmha edilen stokta:
+
+- `quantity_kg` değeri 0'a düşer.
+- `disposal_status=disposed`, `disposed_at`, `disposed_quantity_kg` ve `disposal_penalty_points` alanları yazılır.
+- Kooperatifin `green_score` değerinden ceza puanı düşülür.
+- `carbon_log` tablosuna `event_type=disposal` ve negatif `points_earned` kaydı atılır.
+
+Varsayılan ceza 10 kg başına 1 puandır ve tek imhada 50 puanla sınırlıdır:
+
+```env
+DISPOSAL_PENALTY_PER_10KG=1
+DISPOSAL_MAX_PENALTY=50
+```
 
 ### 7. Hızlı test
 

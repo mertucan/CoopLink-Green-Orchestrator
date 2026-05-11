@@ -6,11 +6,12 @@ from dotenv import load_dotenv
 from app.agents.logistics_agent import LogisticsAgent
 from app.agents.stock_agent import StockAgent
 from app.agents.swap_agent import SwapAgent
+from app.services.ai_service import GEMINI_ENABLED, GEMINI_MODELS, _classify_gemini_error
 from app.services.supabase_client import get_supabase_client
 
 load_dotenv()
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 SYSTEM_PROMPT = (
     "Sen CoopLink - Green Orchestrator asistanısın. Tarım ve gıda kooperatifleri ağını yönetir, "
@@ -73,13 +74,13 @@ class Orchestrator:
         model_name = "local-intent-fallback"
         prompt = "Mesaj için intent seç: query_stock, propose_swap, track_delivery. Sadece intent yaz."
         try:
-            if os.getenv("GEMINI_API_KEY") and not os.getenv("GEMINI_API_KEY", "").startswith("your-"):
+            if GEMINI_ENABLED and os.getenv("GEMINI_API_KEY") and not os.getenv("GEMINI_API_KEY", "").startswith("your-"):
                 gemini_result = await self._gemini_intent_with_backoff(message, intent)
                 intent = gemini_result["intent"]
                 used_gemini = gemini_result["used_gemini"]
                 fallback_used = gemini_result["fallback_used"]
                 gemini_response = gemini_result["raw_response"]
-                model_name = GEMINI_MODEL if used_gemini else "local-intent-fallback"
+                model_name = gemini_result.get("model_name", GEMINI_MODEL) if used_gemini else "local-intent-fallback"
 
             if intent == "propose_swap":
                 result = await self.swap_agent.propose_swap(extract_product(message), extract_quantity(message))
@@ -119,20 +120,33 @@ class Orchestrator:
             return response
 
     async def _gemini_intent_with_backoff(self, message: str, fallback: str) -> dict:
-        for delay in (1, 2, 4):
+        for model_name in GEMINI_MODELS:
             try:
                 import google.generativeai as genai
 
                 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-                model = genai.GenerativeModel(GEMINI_MODEL, system_instruction=SYSTEM_PROMPT)
+                model = genai.GenerativeModel(model_name, system_instruction=SYSTEM_PROMPT)
                 prompt = f"Mesaj için intent seç: query_stock, propose_swap, track_delivery. Sadece intent yaz.\nMesaj: {message}"
                 response = await asyncio.to_thread(model.generate_content, prompt)
                 candidate = response.text.strip()
                 if candidate in {"query_stock", "propose_swap", "track_delivery"}:
-                    return {"intent": candidate, "used_gemini": True, "fallback_used": False, "raw_response": candidate}
-            except Exception:
-                await asyncio.sleep(delay)
-        return {"intent": fallback, "used_gemini": False, "fallback_used": True, "raw_response": None}
+                    return {
+                        "intent": candidate,
+                        "used_gemini": True,
+                        "fallback_used": False,
+                        "raw_response": candidate,
+                        "model_name": model_name,
+                    }
+            except Exception as exc:
+                print(f"Gemini intent hata verdi. Model={model_name} Hata={_classify_gemini_error(str(exc))}")
+                await asyncio.sleep(1)
+        return {
+            "intent": fallback,
+            "used_gemini": False,
+            "fallback_used": True,
+            "raw_response": None,
+            "model_name": "local-intent-fallback",
+        }
 
     def _persist_context(self, channel_id: str, message: str, response: str, intent: str) -> None:
         existing = self.supabase.table("sessions").select("*").eq("channel_id", channel_id).limit(1).execute().data

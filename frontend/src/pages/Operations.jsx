@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Bell, Brain, ClipboardList, FileText, HandCoins, LineChart, MessageSquare, Sparkles, Truck, Utensils } from 'lucide-react'
+﻿import { AlertTriangle, ArrowRight, Bell, Brain, ClipboardList, FileText, HandCoins, LineChart, MessageSquare, Sparkles, Truck, Utensils } from 'lucide-react'
 import CarbonChart from '../components/CarbonChart'
 import RiskBadge from '../components/RiskBadge'
 import SwapCard from '../components/SwapCard'
@@ -72,16 +72,16 @@ export default function Operations({ goTo }) {
         <section className="panel p-4">
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-ink">Öneri Motoru Nasıl Çalışır?</h2>
-            <p className="text-sm text-moss">Takas önerisi dört sinyalden oluşan weighted scorer ile üretilir.</p>
+            <p className="text-sm text-moss">Takas önerisi dört sinyalden oluşan skorla üretilir.</p>
           </div>
           <div className="space-y-3 text-sm">
-            <Rule label="Talep uyumu" value="40%" text="Ürünün karşı tarafta takasa uygun olup olmadığı ve miktarın ne kadar karşılandığı." />
-            <Rule label="Mesafe etkisi" value="20%" text="Kooperatifler arası mesafe; yakın eşleşmeler daha avantajlıdır." />
-            <Rule label="Aciliyet" value="30%" text="Son kullanma tarihi ve risk skoru yüksek ürünler öne alınır." />
-            <Rule label="Karbon etkisi" value="10%" text="Ortak rota ile tahmini CO2 tasarrufu skorun küçük ama görünür parçasıdır." />
+            <Rule label="Talep uyumu" value="40%" text="Ürün ve miktar uyumu." />
+            <Rule label="Mesafe etkisi" value="20%" text="Yakın eşleşmeler öne çıkar." />
+            <Rule label="Aciliyet" value="30%" text="Yüksek riskli ürünler önceliklidir." />
+            <Rule label="Karbon etkisi" value="10%" text="CO2 tasarrufu skora eklenir." />
           </div>
           <div className="mt-5 rounded-md bg-mist p-3 text-sm text-moss">
-            Öneri akışı: riskli stok seçilir <ArrowRight className="inline" size={14} /> en yakın uygun kooperatif bulunur <ArrowRight className="inline" size={14} /> skor ve karbon hesaplanır <ArrowRight className="inline" size={14} /> bekleyen takas oluşturulur.
+            Öneri akışı: stok <ArrowRight className="inline" size={14} /> eşleşme <ArrowRight className="inline" size={14} /> skor <ArrowRight className="inline" size={14} /> takas.
           </div>
         </section>
       </div>
@@ -90,9 +90,9 @@ export default function Operations({ goTo }) {
         <div className="mb-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
           <div>
             <h2 className="text-lg font-semibold text-ink">AI Senaryo Kütüphanesi</h2>
-            <p className="text-sm text-moss">Demo ve sonraki fazlar için uygulanabilir yapay zeka akışları</p>
+            <p className="text-sm text-moss">Uygulanabilir yapay zeka akışları</p>
           </div>
-          <span className="rounded-md bg-mist px-3 py-2 text-xs font-semibold text-moss">Önceliklendirilmiş 6 senaryo</span>
+          <span className="rounded-md bg-mist px-3 py-2 text-xs font-semibold text-moss">6 senaryo</span>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {aiScenarios.map((scenario) => {
@@ -122,7 +122,7 @@ export default function Operations({ goTo }) {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-ink">Bekleyen Onaylar</h2>
-            <p className="text-sm text-moss">Onaylandığında stok düşer; öğün, karbon, TL değer ve puan yazılır.</p>
+            <p className="text-sm text-moss">Onaylanınca stok ve puan güncellenir.</p>
             </div>
             <button onClick={() => goTo('swaps')} className="rounded-md bg-mist px-3 py-2 text-sm font-medium text-moss">Tümü</button>
           </div>
@@ -157,7 +157,7 @@ export default function Operations({ goTo }) {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-ink">Son AI Kararları</h2>
-              <p className="text-sm text-moss">Gemini/fallback intent kararları</p>
+              <p className="text-sm text-moss">Gemini/fallback kararları</p>
             </div>
             <button onClick={() => goTo('aiLogs')} className="rounded-md bg-mist px-3 py-2 text-sm font-medium text-moss">Loglar</button>
           </div>
@@ -186,37 +186,37 @@ const aiScenarios = [
     title: 'İsraf erken uyarı',
     phase: 'Hemen',
     icon: Bell,
-    text: 'Son kullanma tarihi, miktar ve geçmiş satış hızına göre riskli stokları yöneticinin önüne düşürür.'
+    text: 'Riskli stokları yöneticinin önüne düşürür.'
   },
   {
-    title: 'Doğal dil mesaj asistanı',
+    title: 'Doğal dil asistanı',
     phase: 'Hemen',
     icon: MessageSquare,
-    text: 'Üretici mesajlarını intent olarak ayırır: stok sorgusu, takas önerisi, teslimat durumu veya rapor isteği.'
+    text: 'Mesajları stok, takas veya teslimat niyetine ayırır.'
   },
   {
-    title: 'Akıllı takas eşleştirme',
+    title: 'Akıllı takas',
     phase: 'Hemen',
     icon: Brain,
-    text: 'Talep uyumu, mesafe, aciliyet ve karbon etkisini birleştirerek en iyi kooperatif eşleşmesini önerir.'
+    text: 'En uygun kooperatif eşleşmesini önerir.'
   },
   {
-    title: 'Rota ve araç planlama',
+    title: 'Rota planlama',
     phase: 'Faz 2',
     icon: Truck,
-    text: 'Komşu teslimatları aynı rotaya alır, tahmini yakıt ve CO2 tasarrufunu hesaplar.'
+    text: 'Teslimatları ortak rotaya alır.'
   },
   {
-    title: 'Haftalık yönetici özeti',
+    title: 'Haftalık özet',
     phase: 'Faz 2',
     icon: FileText,
-    text: 'Kurtarılan gıda, kaybedilen fırsatlar, en iyi kooperatif ve önerilen aksiyonları Türkçe raporlar.'
+    text: 'Kurtarılan değeri ve önerileri raporlar.'
   },
   {
     title: 'Talep tahmini',
     phase: 'Faz 3',
     icon: LineChart,
-    text: 'Sezon, bölge ve geçmiş takas verilerine göre hangi ürünün nerede talep göreceğini tahmin eder.'
+    text: 'Ürün talebini bölgeye göre tahmin eder.'
   }
 ]
 

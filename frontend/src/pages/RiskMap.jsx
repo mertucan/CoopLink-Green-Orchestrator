@@ -1,10 +1,11 @@
 import { AlertTriangle, ArrowRight, Leaf, MapPinned, Route, Truck } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
+import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Tooltip, Popup, useMap, GeoJSON } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import turkeyProvinces from '../data/turkey-provinces.json'
+import { useAuth } from '../hooks/useAuth'
 import { useCooperatives, useInventory } from '../hooks/useInventory'
 import { useSwaps } from '../hooks/useSwaps'
-import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, CircleMarker, Circle, Polyline, Tooltip, Popup, useMap, GeoJSON } from 'react-leaflet'
-import turkeyProvinces from '../data/turkey-provinces.json'
 
 function riskColor(risk) {
   if (risk >= 0.7) return '#c46f44'
@@ -25,22 +26,30 @@ function normalizeProvinceName(value = '') {
     .replace('afyonkarahisar', 'afyon')
 }
 
+function markerCenter(coop) {
+  return [Number(coop?.display_latitude ?? coop?.latitude), Number(coop?.display_longitude ?? coop?.longitude)]
+}
+
+function hasValidCoordinates(coop) {
+  const [latitude, longitude] = markerCenter(coop)
+  return Number.isFinite(latitude) && Number.isFinite(longitude)
+}
+
 function haversineKm(from, to) {
   const toRad = (value) => (value * Math.PI) / 180
-  const earthRadiusKm = 6371
-  const lat1 = Number(from.latitude)
-  const lat2 = Number(to.latitude)
+  const [lat1, lon1] = markerCenter(from)
+  const [lat2, lon2] = markerCenter(to)
   const deltaLat = toRad(lat2 - lat1)
-  const deltaLon = toRad(Number(to.longitude) - Number(from.longitude))
+  const deltaLon = toRad(lon2 - lon1)
   const a =
     Math.sin(deltaLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(deltaLon / 2) ** 2
-  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 function routeTone(score) {
-  if (score >= 0.8) return { color: '#2f8f5b', label: 'Güçlü rota' }
-  if (score >= 0.65) return { color: '#d99b28', label: 'İzlenmeli' }
+  if (score >= 0.8) return { color: '#2f8f5b', label: 'Güçlü' }
+  if (score >= 0.65) return { color: '#d99b28', label: 'İzle' }
   return { color: '#6f806f', label: 'Alternatif' }
 }
 
@@ -49,33 +58,51 @@ function routeKey(route) {
 }
 
 function buildRoutePositions(route) {
-  const start = [Number(route.from.latitude), Number(route.from.longitude)]
-  const end = [Number(route.to.latitude), Number(route.to.longitude)]
+  const start = markerCenter(route.from)
+  const end = markerCenter(route.to)
   if (!route.routeOffset) return [start, end]
-
   const midLat = (start[0] + end[0]) / 2
   const midLon = (start[1] + end[1]) / 2
   const deltaLat = end[0] - start[0]
   const deltaLon = end[1] - start[1]
   const length = Math.sqrt(deltaLat ** 2 + deltaLon ** 2) || 1
-  const normalLat = -deltaLon / length
-  const normalLon = deltaLat / length
-  const curveStrength = 0.22 * route.routeOffset
   return [
     start,
-    [midLat + normalLat * curveStrength, midLon + normalLon * curveStrength],
+    [midLat + (-deltaLon / length) * 0.22 * route.routeOffset, midLon + (deltaLat / length) * 0.22 * route.routeOffset],
     end,
   ]
 }
 
-// Haritayı Türkiye'ye odaklayan yardımcı bileşen
+function buildDisplayCooperatives(cooperatives) {
+  const groups = cooperatives.reduce((map, coop) => {
+    const key = normalizeProvinceName(coop.region)
+    map.set(key, [...(map.get(key) || []), coop])
+    return map
+  }, new Map())
+
+  return [...groups.values()].flatMap((group) => {
+    const sorted = [...group].sort((a, b) => String(a.name).localeCompare(String(b.name), 'tr'))
+    return sorted.map((coop, index) => {
+      if (!Number.isFinite(Number(coop.latitude)) || !Number.isFinite(Number(coop.longitude)) || sorted.length === 1) {
+        return { ...coop, same_region_count: sorted.length, region_index: index }
+      }
+      const angle = (Math.PI * 2 * index) / sorted.length
+      const spread = Math.min(0.1, 0.035 + sorted.length * 0.006)
+      return {
+        ...coop,
+        same_region_count: sorted.length,
+        region_index: index,
+        display_latitude: Number(coop.latitude) + Math.sin(angle) * spread,
+        display_longitude: Number(coop.longitude) + Math.cos(angle) * spread,
+      }
+    })
+  })
+}
+
 function TurkeyFit() {
   const map = useMap()
   useEffect(() => {
-    map.fitBounds([
-      [35.8, 25.6],
-      [42.1, 44.8],
-    ])
+    map.fitBounds([[35.8, 25.6], [42.1, 44.8]])
   }, [map])
   return null
 }
@@ -83,92 +110,95 @@ function TurkeyFit() {
 function StableMapSize({ trigger }) {
   const map = useMap()
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      map.invalidateSize()
-    }, 80)
+    const timer = window.setTimeout(() => map.invalidateSize(), 80)
     return () => window.clearTimeout(timer)
   }, [map, trigger])
   return null
 }
 
 export default function RiskMap({ goTo }) {
+  const { user, isCooperative } = useAuth()
   const { data: inventory = [] } = useInventory('')
   const { data: cooperatives = [] } = useCooperatives()
   const { data: pendingSwaps = [] } = useSwaps('pending')
 
-  const cooperativeMap = useMemo(
-    () => new Map(cooperatives.map((coop) => [coop.id, coop])),
-    [cooperatives]
-  )
+  const displayCooperatives = useMemo(() => buildDisplayCooperatives(cooperatives), [cooperatives])
+  const cooperativeMap = useMemo(() => new Map(displayCooperatives.map((coop) => [coop.id, coop])), [displayCooperatives])
 
   const riskyItems = useMemo(
-    () => inventory.filter((item) => Number(item.risk_score || 0) >= 0.4 && Number(item.quantity_kg || 0) > 0),
-    [inventory]
+    () => inventory
+      .filter((item) => !isCooperative || item.cooperative_id === user?.id)
+      .filter((item) => Number(item.risk_score || 0) >= 0.4 && Number(item.quantity_kg || 0) > 0),
+    [inventory, isCooperative, user?.id]
   )
-
   const urgentItems = riskyItems.filter((item) => Number(item.risk_score || 0) >= 0.7)
 
   const pendingRoutes = pendingSwaps
-    .map((swap) => ({
-      swap,
-      from: cooperativeMap.get(swap.from_cooperative_id),
-      to: cooperativeMap.get(swap.to_cooperative_id),
-    }))
-    .filter((route) => route.from?.latitude && route.to?.latitude)
+    .map((swap) => ({ swap, from: cooperativeMap.get(swap.from_cooperative_id), to: cooperativeMap.get(swap.to_cooperative_id) }))
+    .filter((route) => hasValidCoordinates(route.from) && hasValidCoordinates(route.to))
 
-  const routeBucketCounts = pendingRoutes.reduce((map, route) => {
+  const suggestedRoutes = riskyItems
+    .map((item) => {
+      const source = cooperativeMap.get(item.cooperative_id)
+      if (!hasValidCoordinates(source)) return null
+      const nearest = displayCooperatives
+        .filter((coop) => coop.id !== item.cooperative_id)
+        .filter(hasValidCoordinates)
+        .map((coop) => ({ coop, distanceKm: haversineKm(source, coop) }))
+        .sort((a, b) => a.distanceKm - b.distanceKm)[0]
+      if (!nearest) return null
+      const risk = Number(item.risk_score || 0)
+      const matchScore = Math.min(0.95, Math.max(0.58, 0.62 + risk * 0.25 - nearest.distanceKm / 1800))
+      return {
+        from: source,
+        to: nearest.coop,
+        suggested: true,
+        swap: {
+          id: `suggested-${item.id}`,
+          from_cooperative_id: source.id,
+          to_cooperative_id: nearest.coop.id,
+          product_name: item.product_name,
+          quantity_kg: item.quantity_kg,
+          match_score: matchScore,
+          carbon_saved_kg: Math.max(0.4, nearest.distanceKm * 0.018),
+        },
+      }
+    })
+    .filter(Boolean)
+
+  const mapRoutes = pendingRoutes.length > 0 ? pendingRoutes : suggestedRoutes.slice(0, 6)
+
+  const routeBucketCounts = mapRoutes.reduce((map, route) => {
     const key = routeKey(route)
     map.set(key, (map.get(key) || 0) + 1)
     return map
   }, new Map())
   const routeBucketSeen = new Map()
-  const routeInsights = pendingRoutes.map((route) => {
+  const routeInsights = mapRoutes.map((route) => {
     const key = routeKey(route)
     const seen = routeBucketSeen.get(key) || 0
     routeBucketSeen.set(key, seen + 1)
     const total = routeBucketCounts.get(key) || 1
     const routeOffset = total > 1 ? seen - (total - 1) / 2 : 0
-    const sourceRisk = inventory.find(
-      (item) =>
-        item.cooperative_id === route.swap.from_cooperative_id &&
-        item.product_id === route.swap.product_id &&
-        Number(item.quantity_kg || 0) > 0
-    )
-    const distanceKm = haversineKm(route.from, route.to)
     const score = Number(route.swap.match_score || 0)
-    const tone = routeTone(score)
-    const risk = Number(sourceRisk?.risk_score || 0)
-    const meals = Number(route.swap.saved_meals || sourceRisk?.lost_meals_if_unrescued || 0)
-    const value = Number(route.swap.local_value_tl || sourceRisk?.lost_local_value_tl_if_unrescued || 0)
-    const carbon = Number(route.swap.carbon_saved_kg || 0)
     return {
       ...route,
-      sourceRisk,
-      distanceKm,
       score,
-      tone,
-      risk,
-      meals,
-      value,
-      carbon,
+      tone: routeTone(score),
+      distanceKm: haversineKm(route.from, route.to),
+      carbon: Number(route.swap.carbon_saved_kg || 0),
       routeOffset,
-      reason: [
-        `${route.from.region} tarafında ${route.swap.quantity_kg} kg ${route.swap.product_name || 'ürün'} için bekleyen takas var.`,
-        risk >= 0.7 ? `Stok acil riskte: risk skoru ${risk.toFixed(2)}.` : `Stok izleme eşiğinde: risk skoru ${risk.toFixed(2)}.`,
-        `${route.to.region} hedefi, mevcut takas önerisinde alıcı kooperatif olarak seçildi.`,
-      ],
+      suggested: route.suggested,
     }
   })
 
   const demandCooperativeIds = new Set(routeInsights.map((route) => route.to.id))
   const totalLossMeals = urgentItems.reduce((sum, item) => sum + Number(item.lost_meals_if_unrescued || 0), 0)
-  const totalLossValue = urgentItems.reduce(
-    (sum, item) => sum + Number(item.lost_local_value_tl_if_unrescued || 0),
-    0
-  )
+  const totalLossValue = urgentItems.reduce((sum, item) => sum + Number(item.lost_local_value_tl_if_unrescued || 0), 0)
+
   const provinceStats = useMemo(() => {
     const stats = new Map()
-    cooperatives.forEach((coop) => {
+    displayCooperatives.forEach((coop) => {
       const key = normalizeProvinceName(coop.region)
       const current = stats.get(key) || { cooperatives: [], risks: [], pendingRoutes: 0, maxRisk: 0 }
       current.cooperatives.push(coop)
@@ -182,33 +212,37 @@ export default function RiskMap({ goTo }) {
       stats.set(key, current)
     })
     routeInsights.forEach((route) => {
-      const fromKey = normalizeProvinceName(route.from.region)
-      const toKey = normalizeProvinceName(route.to.region)
-      ;[fromKey, toKey].forEach((key) => {
+      ;[normalizeProvinceName(route.from.region), normalizeProvinceName(route.to.region)].forEach((key) => {
         const current = stats.get(key) || { cooperatives: [], risks: [], pendingRoutes: 0, maxRisk: 0 }
         current.pendingRoutes += 1
         stats.set(key, current)
       })
     })
     return stats
-  }, [cooperatives, riskyItems, routeInsights])
+  }, [displayCooperatives, riskyItems, routeInsights])
 
-  const provinceLayerKey = useMemo(
-    () => `${cooperatives.length}-${riskyItems.length}-${routeInsights.length}`,
-    [cooperatives.length, riskyItems.length, routeInsights.length]
+  const provinceClusters = useMemo(
+    () => [...provinceStats.entries()]
+      .map(([key, stats]) => ({ key, ...stats }))
+      .filter((stats) => stats.cooperatives.length > 1 && hasValidCoordinates(stats.cooperatives[0]))
+      .map((stats) => ({
+        ...stats,
+        center: markerCenter(stats.cooperatives[0]),
+        urgentCount: stats.risks.filter((item) => Number(item.risk_score || 0) >= 0.7).length,
+      })),
+    [provinceStats]
   )
 
   const getProvinceStyle = (feature) => {
-    const key = normalizeProvinceName(feature.properties?.name)
-    const stats = provinceStats.get(key)
-    const hasCoop = Boolean(stats?.cooperatives.length)
+    const stats = provinceStats.get(normalizeProvinceName(feature.properties?.name))
+    const coopCount = stats?.cooperatives.length || 0
     const maxRisk = Number(stats?.maxRisk || 0)
-    const fillColor = maxRisk >= 0.7 ? '#c46f44' : maxRisk >= 0.4 ? '#d99b28' : hasCoop ? '#2f8f5b' : '#eef5ee'
+    const fillColor = maxRisk >= 0.7 ? '#c46f44' : maxRisk >= 0.4 ? '#d99b28' : coopCount > 1 ? '#1f7a66' : coopCount ? '#2f8f5b' : '#eef5ee'
     return {
-      color: hasCoop ? '#17211b' : '#90a390',
-      weight: hasCoop ? 2.4 : 1.25,
+      color: coopCount > 1 ? '#0f4f43' : coopCount ? '#17211b' : '#90a390',
+      weight: coopCount > 1 ? 3.2 : coopCount ? 2.4 : 1.25,
       fillColor,
-      fillOpacity: maxRisk >= 0.4 ? 0.28 : hasCoop ? 0.2 : 0.1,
+      fillOpacity: maxRisk >= 0.4 ? 0.28 : coopCount ? 0.2 : 0.1,
       opacity: 0.95,
     }
   }
@@ -217,258 +251,150 @@ export default function RiskMap({ goTo }) {
     const name = feature.properties?.name || 'İl'
     const stats = provinceStats.get(normalizeProvinceName(name))
     const coopNames = stats?.cooperatives.map((coop) => coop.name).join('<br/>') || 'Kooperatif yok'
-    const urgentCount = stats?.risks.filter((item) => Number(item.risk_score || 0) >= 0.7).length || 0
-    const riskCount = stats?.risks.length || 0
-    const meals = stats?.risks.reduce((sum, item) => sum + Number(item.lost_meals_if_unrescued || 0), 0) || 0
-    const value = stats?.risks.reduce((sum, item) => sum + Number(item.lost_local_value_tl_if_unrescued || 0), 0) || 0
-    layer.bindTooltip(name, { sticky: true })
-    layer.bindPopup(
-      `<strong>${name}</strong><br/>
-      <span>Kooperatif:</span><br/>${coopNames}<br/>
-      <span>Riskli stok: ${riskCount}</span><br/>
-      <span>Acil stok: ${urgentCount}</span><br/>
-      <span>Riskteki etki: ${formatNumber(meals)} öğün · ${formatNumber(value)} TL</span>`
-    )
+    layer.bindTooltip(`${name}${stats?.cooperatives.length > 1 ? ` · ${stats.cooperatives.length}` : ''}`, { sticky: true })
+    layer.bindPopup(`<strong>${name}</strong><br/>${coopNames}<br/>Riskli stok: ${stats?.risks.length || 0}`)
     layer.on({
-      mouseover: () => layer.setStyle({ weight: 3.2, fillOpacity: 0.38 }),
+      mouseover: () => layer.setStyle({ weight: 3.6, fillOpacity: 0.4 }),
       mouseout: () => layer.setStyle(getProvinceStyle(feature)),
     })
   }
 
   return (
     <div className="space-y-6">
-      {/* Başlık */}
       <section className="soft-panel flex flex-col justify-between gap-4 p-5 lg:flex-row lg:items-end">
         <div>
-          <p className="text-sm font-semibold text-leaf">Canlı risk görünümü</p>
-          <h1 className="mt-1 text-3xl font-semibold text-ink">Türkiye Risk Isı Haritası</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-moss">
-            Riskli stokları, talep noktalarını ve önerilen takas rotalarını Türkiye üzerinde takip edin.
-          </p>
+          <p className="text-sm font-semibold text-leaf">Harita</p>
+          <h1 className="mt-1 text-3xl font-semibold text-ink">Risk Haritası</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-moss">Risk, rota ve talep noktaları.</p>
         </div>
-        <button
-          onClick={() => goTo('inventory')}
-          className="focus-ring rounded-md bg-leaf px-4 py-2 text-sm font-medium text-white"
-        >
+        <button onClick={() => goTo('inventory')} className="focus-ring rounded-md bg-leaf px-4 py-2 text-sm font-medium text-white">
           Stoklara Git
         </button>
       </section>
 
-      {/* Metrik kartları */}
       <div className="grid gap-4 md:grid-cols-4">
         <MapMetric icon={AlertTriangle} title="Acil Nokta" value={urgentItems.length} tone="text-clay" />
-        <MapMetric icon={Truck} title="Bekleyen Rota" value={pendingRoutes.length} tone="text-ink" />
-        <MapMetric icon={Leaf} title="Riskteki Öğün" value={formatNumber(totalLossMeals)} tone="text-leaf" />
-        <MapMetric
-          icon={Route}
-          title="Riskteki Değer"
-          value={`${formatNumber(totalLossValue)} TL`}
-          tone="text-clay"
-        />
+        <MapMetric icon={Truck} title="Rota" value={routeInsights.length} tone="text-ink" />
+        <MapMetric icon={Leaf} title="Öğün" value={formatNumber(totalLossMeals)} tone="text-leaf" />
+        <MapMetric icon={Route} title="Değer" value={`${formatNumber(totalLossValue)} TL`} tone="text-clay" />
       </div>
 
-      {/* Harita + Sidebar */}
       <section className="panel overflow-hidden">
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
-          {/* Harita alanı */}
           <div className="relative h-[540px] min-h-0 overflow-hidden lg:h-[620px]">
-            <MapContainer
-              center={[39.1, 35.5]}
-              zoom={6}
-              attributionControl={false}
-              scrollWheelZoom
-              style={{ height: '100%', width: '100%', zIndex: 0 }}
-              className="z-0"
-            >
+            <MapContainer center={[39.1, 35.5]} zoom={6} attributionControl={false} scrollWheelZoom style={{ height: '100%', width: '100%', zIndex: 0 }} className="z-0">
               <TurkeyFit />
               <StableMapSize trigger={`${inventory.length}-${pendingSwaps.length}-${cooperatives.length}`} />
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap katkıcıları" maxZoom={18} />
+              <GeoJSON key={`${displayCooperatives.length}-${riskyItems.length}-${routeInsights.length}`} data={turkeyProvinces} style={getProvinceStyle} onEachFeature={handleProvince} />
 
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="© OpenStreetMap katkıcıları"
-                maxZoom={18}
-              />
-
-              <GeoJSON
-                key={provinceLayerKey}
-                data={turkeyProvinces}
-                style={getProvinceStyle}
-                onEachFeature={handleProvince}
-              />
-
-              {/* Takas rotaları (kesik çizgili) */}
-              {routeInsights.map((route) => (
-                <Polyline
-                  key={route.swap.id}
-                  positions={buildRoutePositions(route)}
-                  pathOptions={{
-                    color: route.tone.color,
-                    weight: 2 + route.score * 3,
-                    dashArray: '8 7',
-                    opacity: 0.85,
-                  }}
-                >
+              {provinceClusters.map((cluster) => (
+                <CircleMarker key={`cluster-${cluster.key}`} center={cluster.center} radius={15 + Math.min(cluster.cooperatives.length * 2, 10)} pathOptions={{ fillColor: cluster.urgentCount ? '#c46f44' : '#1f7a66', color: '#ffffff', weight: 3, fillOpacity: 0.82 }}>
+                  <Tooltip direction="top" offset={[0, -12]}>{cluster.cooperatives[0].region} · {cluster.cooperatives.length} kooperatif</Tooltip>
                   <Popup>
-                    <strong>{route.swap.product_name || 'Ürün'}</strong> · {route.swap.quantity_kg} kg
-                    <br />
-                    <span style={{ fontSize: 12 }}>
-                      {route.from.region} → {route.to.region}
-                    </span>
+                    <div style={{ minWidth: 190 }}>
+                      <strong>{cluster.cooperatives[0].region}</strong>
+                      <div style={{ marginTop: 6, color: '#6f806f', fontSize: 12 }}>Aynı ilde çoklu kayıt.</div>
+                      <div style={{ marginTop: 8, display: 'grid', gap: 4 }}>
+                        {cluster.cooperatives.map((coop) => <div key={coop.id} style={{ fontSize: 12 }}><strong>{coop.name}</strong></div>)}
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 12 }}>Riskli stok: {cluster.risks.length}</div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
+
+              {routeInsights.map((route) => (
+                <Polyline key={route.swap.id} positions={buildRoutePositions(route)} pathOptions={{ color: route.tone.color, weight: 2 + route.score * 3, dashArray: '8 7', opacity: 0.85 }}>
+                  <Popup>
+                    <strong>{route.swap.product_name || 'Ürün'}</strong> · {route.swap.quantity_kg} kg<br />
+                    <span style={{ fontSize: 12 }}>{route.from.region} → {route.to.region}</span>
+                    {route.suggested && <><br /><span style={{ fontSize: 12 }}>Öneri rota</span></>}
                   </Popup>
                 </Polyline>
               ))}
 
-              {/* Risk ısı halesi (büyük yarı şeffaf daire) */}
               {riskyItems.map((item) => {
                 const coop = cooperativeMap.get(item.cooperative_id)
-                if (!coop?.latitude || !coop?.longitude) return null
+                if (!hasValidCoordinates(coop)) return null
                 const risk = Number(item.risk_score || 0)
-                const radiusMeters = 25000 + Math.min(Number(item.quantity_kg || 0) * 25, 50000)
-                return (
-                  <Circle
-                    key={`halo-${item.id}`}
-                    center={[Number(coop.latitude), Number(coop.longitude)]}
-                    radius={radiusMeters}
-                    pathOptions={{
-                      color: riskColor(risk),
-                      fillColor: riskColor(risk),
-                      fillOpacity: 0.15,
-                      weight: 0,
-                    }}
-                  />
-                )
+                return <Circle key={`halo-${item.id}`} center={markerCenter(coop)} radius={22000 + Math.min(Number(item.quantity_kg || 0) * 18, 42000)} pathOptions={{ color: riskColor(risk), fillColor: riskColor(risk), fillOpacity: 0.13, weight: 0 }} />
               })}
 
-              {/* Kooperatif noktaları */}
-              {cooperatives.map((coop) => {
-                if (!coop.latitude || !coop.longitude) return null
+              {displayCooperatives.map((coop) => {
+                if (!hasValidCoordinates(coop)) return null
                 const isDemand = demandCooperativeIds.has(coop.id)
+                const hasSameRegion = coop.same_region_count > 1
+                const coopRisks = riskyItems.filter((item) => item.cooperative_id === coop.id)
+                const urgentRisk = coopRisks.some((item) => Number(item.risk_score || 0) >= 0.7)
                 return (
-                  <CircleMarker
-                    key={`coop-${coop.id}`}
-                    center={[Number(coop.latitude), Number(coop.longitude)]}
-                    radius={isDemand ? 8 : 5}
-                    pathOptions={{
-                      fillColor: isDemand ? '#2f8f5b' : '#8fa08f',
-                      color: isDemand ? '#1c6640' : '#6f806f',
-                      weight: 1.5,
-                      fillOpacity: isDemand ? 0.95 : 0.65,
-                    }}
-                  >
-                    <Tooltip direction="top" offset={[0, -6]}>
-                      {coop.region}
-                    </Tooltip>
+                  <CircleMarker key={`coop-${coop.id}`} center={markerCenter(coop)} radius={urgentRisk ? 9 : isDemand ? 8 : hasSameRegion ? 7 : 5} pathOptions={{ fillColor: urgentRisk ? '#c46f44' : isDemand ? '#2f8f5b' : hasSameRegion ? '#1f7a66' : '#8fa08f', color: hasSameRegion ? '#ffffff' : isDemand ? '#1c6640' : '#6f806f', weight: hasSameRegion ? 2.4 : 1.5, fillOpacity: urgentRisk || isDemand ? 0.95 : 0.72 }}>
+                    <Tooltip direction="top" offset={[0, -8]}>{coop.name} · {coop.region}</Tooltip>
+                    <Popup>
+                      <div style={{ minWidth: 190 }}>
+                        <strong>{coop.name}</strong>
+                        <div style={{ color: '#6f806f', fontSize: 12, marginTop: 2 }}>{coop.region}</div>
+                        {hasSameRegion && <div style={{ marginTop: 6, color: '#6f806f', fontSize: 12 }}>Bu ilde {coop.same_region_count} kooperatif var.</div>}
+                        <div style={{ marginTop: 8, fontSize: 12 }}><strong>Riskli stok</strong>: {coopRisks.length}</div>
+                      </div>
+                    </Popup>
                   </CircleMarker>
                 )
               })}
 
-              {/* Risk marker'ları (tıklanabilir, popup'lı) */}
               {riskyItems.map((item) => {
                 const coop = cooperativeMap.get(item.cooperative_id)
-                if (!coop?.latitude || !coop?.longitude) return null
+                if (!hasValidCoordinates(coop)) return null
                 const risk = Number(item.risk_score || 0)
-                const radius = 10 + Math.min(Number(item.quantity_kg || 0) / 40, 14)
                 return (
-                  <CircleMarker
-                    key={`risk-${item.id}`}
-                    center={[Number(coop.latitude), Number(coop.longitude)]}
-                    radius={radius}
-                    pathOptions={{
-                      fillColor: riskColor(risk),
-                      color: '#fff',
-                      weight: 1.5,
-                      fillOpacity: 0.92,
-                    }}
-                  >
-                    <Tooltip direction="top" offset={[0, -radius]} permanent={false}>
-                      {Math.round(risk * 100)}
-                    </Tooltip>
+                  <CircleMarker key={`risk-${item.id}`} center={markerCenter(coop)} radius={9 + Math.min(Number(item.quantity_kg || 0) / 45, 13)} pathOptions={{ fillColor: riskColor(risk), color: '#fff', weight: 1.5, fillOpacity: 0.9 }}>
+                    <Tooltip direction="top" offset={[0, -10]}>{Math.round(risk * 100)}</Tooltip>
                     <Popup>
-                      <div style={{ minWidth: 170 }}>
-                        <p style={{ fontWeight: 600, fontSize: 14, margin: '0 0 2px' }}>{item.product_name}</p>
-                        <p style={{ fontSize: 12, color: '#666', margin: '0 0 8px' }}>
-                          {coop.region} · {item.quantity_kg} kg
-                        </p>
-                        <span
-                          style={{
-                            background: `${riskColor(risk)}22`,
-                            color: riskColor(risk),
-                            padding: '2px 8px',
-                            borderRadius: 99,
-                            fontWeight: 600,
-                            fontSize: 12,
-                          }}
-                        >
-                          Risk {Math.round(risk * 100)}
-                        </span>
-                        <div style={{ marginTop: 8, fontSize: 11, color: '#555' }}>
-                          {formatNumber(item.lost_meals_if_unrescued)} öğün ·{' '}
-                          {formatNumber(item.lost_local_value_tl_if_unrescued)} TL
-                        </div>
-                      </div>
+                      <strong>{item.product_name}</strong><br />
+                      <span style={{ fontSize: 12 }}>{coop.name} · {item.quantity_kg} kg</span><br />
+                      <span style={{ fontSize: 12 }}>Risk {Math.round(risk * 100)}</span>
                     </Popup>
                   </CircleMarker>
                 )
               })}
             </MapContainer>
 
-            {/* Lejant */}
             <div className="absolute bottom-4 left-4 z-[999] flex flex-wrap gap-2 rounded-md border border-[#dfe8df] bg-white/92 p-2 text-xs font-medium text-moss shadow-sm">
-              <LegendDot color="#c46f44" label="Acil stok" />
-              <LegendDot color="#d99b28" label="Orta risk" />
-              <LegendDot color="#2f8f5b" label="Talep / hedef" />
-              <span className="rounded bg-[#eef5ee] px-2 py-1">Siyah sınır: kooperatif ili</span>
-              <span className="rounded bg-[#eef5ee] px-2 py-1">Çizgi kalınlığı: eşleşme skoru</span>
+              <LegendDot color="#c46f44" label="Acil" />
+              <LegendDot color="#d99b28" label="Orta" />
+              <LegendDot color="#2f8f5b" label="Hedef" />
+              <LegendDot color="#1f7a66" label="Çoklu il" />
             </div>
           </div>
 
-          {/* Sidebar */}
           <aside className="max-h-none overflow-y-auto border-t border-[#dfe8df] bg-white p-4 xl:max-h-[620px] xl:border-l xl:border-t-0">
             <div className="mb-4 flex items-center gap-2">
               <MapPinned className="text-leaf" size={20} />
-              <h2 className="text-lg font-semibold text-ink">Öne çıkan riskler</h2>
+              <h2 className="text-lg font-semibold text-ink">Acil riskler</h2>
             </div>
-
             <div className="space-y-3">
               {urgentItems.slice(0, 6).map((item) => (
                 <div key={item.id} className="rounded-md border border-[#edf2ed] p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-ink">{item.product_name}</p>
-                      <p className="text-sm text-moss">
-                        {item.cooperative_name} · {item.quantity_kg} kg
-                      </p>
+                      <p className="text-sm text-moss">{item.cooperative_name} · {item.quantity_kg} kg</p>
                     </div>
-                    <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">
-                      {Number(item.risk_score || 0).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-moss">
-                    <span>{formatNumber(item.lost_meals_if_unrescued)} öğün</span>
-                    <span>{formatNumber(item.lost_local_value_tl_if_unrescued)} TL</span>
+                    <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">{Number(item.risk_score || 0).toFixed(2)}</span>
                   </div>
                 </div>
               ))}
-              {urgentItems.length === 0 && <p className="text-sm text-moss">Acil riskli stok yok.</p>}
+              {urgentItems.length === 0 && <p className="text-sm text-moss">Acil stok yok.</p>}
             </div>
 
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-ink">Bekleyen rotalar</h3>
-              <div className="mt-3 rounded-md border border-[#edf2ed] bg-[#fbfdfb] p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-moss">Rotalar nasıl belirleniyor?</div>
-                <p className="mt-2 text-xs leading-5 text-moss">
-                  Haritadaki çizgiler Supabase'deki bekleyen takaslardan gelir. Her rota, riskli stoğun bulunduğu kooperatiften
-                  önerilen alıcı kooperatife çizilir; mesafe, eşleşme skoru, CO2 ve kurtarılan değer bilgisiyle açıklanır.
-                </p>
-              </div>
+              <h3 className="text-sm font-semibold text-ink">Rotalar</h3>
               <div className="mt-3 space-y-2">
                 {routeInsights.slice(0, 4).map((route) => (
                   <div key={route.swap.id} className="rounded-md border border-[#edf2ed] bg-[#f7faf7] p-3 text-sm text-moss">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-ink">
-                          {route.swap.product_name || 'Ürün'} · {route.swap.quantity_kg} kg
-                        </div>
+                        <div className="font-semibold text-ink">{route.swap.product_name || 'Ürün'} · {route.swap.quantity_kg} kg</div>
                         <div className="mt-1 flex items-center gap-2">
                           <span>{route.from.region}</span>
                           <ArrowRight size={14} />
@@ -476,35 +402,17 @@ export default function RiskMap({ goTo }) {
                         </div>
                       </div>
                       <span className="rounded-md px-2 py-1 text-xs font-semibold" style={{ color: route.tone.color, backgroundColor: `${route.tone.color}18` }}>
-                        {route.tone.label}
+                        {route.suggested ? 'Öneri' : route.tone.label}
                       </span>
                     </div>
-
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       <RouteMetric label="Mesafe" value={`${route.distanceKm.toFixed(0)} km`} />
                       <RouteMetric label="Skor" value={route.score.toFixed(2)} />
                       <RouteMetric label="CO2" value={`${route.carbon.toFixed(1)} kg`} />
                     </div>
-
-                    <div className="mt-3 rounded-md bg-white p-3">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-moss">Neden çizildi?</div>
-                      <ul className="space-y-1">
-                        {route.reason.map((text) => (
-                          <li key={text} className="flex gap-2 text-xs leading-5 text-moss">
-                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: route.tone.color }} />
-                            <span>{text}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-moss">
-                      <span>{formatNumber(route.meals)} öğün korunabilir</span>
-                      <span>{formatNumber(route.value)} TL değer</span>
-                    </div>
                   </div>
                 ))}
-                {routeInsights.length === 0 && <p className="text-sm text-moss">Bekleyen rota yok.</p>}
+                {routeInsights.length === 0 && <p className="text-sm text-moss">Rota yok.</p>}
               </div>
             </div>
           </aside>

@@ -72,6 +72,7 @@
 - [x] Rota kartlarında mesafe, skor, CO2, öğün/TL ve "neden çizildi?" açıklaması
 - [x] Son kullanma tarihi geçmiş ürünleri stok ekranında ayrı işaretleme
 - [x] Süresi geçmiş ürünler için takas önerisini backend seviyesinde engelleme
+- [x] Süresi geçen ve miktarı pozitif kalan stokları otomatik imha edip kooperatife eksi yeşil puan yazma
 - [x] Bekleyen takası olan stokları silmeden `Takas bekliyor` olarak işaretleme
 - [x] Takas onaylanınca stok düşürme; reddedilince stok miktarını koruma
 - [ ] İleride: ürün bazlı fiyatları DB kolonuna taşıma (`products.avg_price_tl_per_kg`)
@@ -81,7 +82,8 @@
 - [x] İlk açılışta tanıtım mesajı ve `Başla` butonu
 - [x] Riskli stoklardan Telegram üzerinden takas önerisi oluşturma
 - [x] Bekleyen takasları Telegram butonlarıyla onaylama/reddetme
-- [x] Telegramdan stok ekleme: `ürün miktar gün` formatı
+- [x] Telegramdan stok ekleme: önce kooperatif seçimi, sonra `ürün miktar gün` formatı
+- [x] Telegram mesajlarında `**kalın**` işaretlerini HTML biçimlendirmeye çevirme
 - [x] Müşteriye iletilebilir kısa stok özeti üretme
 - [x] Telegram mesajlarını ve buton aksiyonlarını AI Logs tablosuna kaydetme
 - [x] Opsiyonel Telegram kullanıcı kısıtı: `TELEGRAM_ADMIN_ID`
@@ -106,6 +108,7 @@
 - [x] Frontend production build doğrudan Vite ile geçti
 - [x] Supabase mock_data.sql demo verisi eklendi
 - [x] Takas onayı sonrası stok miktarı düşürme eklendi
+- [x] Süresi geçen stoklar için otomatik imha, negatif puan ve `carbon_log` kaydı eklendi
 - [x] Duplicate pending takas önerisi engellendi
 - [x] Leaderboard yalnızca onaylı takasları hesaplayacak şekilde düzeltildi
 - [ ] Pytest çalıştırma: yerel ortamda Python komutu bulunamadığı için çalıştırılamadı
