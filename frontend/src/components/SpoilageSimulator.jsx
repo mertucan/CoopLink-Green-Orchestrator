@@ -1,4 +1,4 @@
-import { Clock, PackageCheck, TrendingDown, X } from 'lucide-react'
+import { AlertTriangle, Clock, HandCoins, PackageCheck, TrendingDown, Utensils, X } from 'lucide-react'
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
@@ -39,6 +39,12 @@ function formatKg(value) {
   })
 }
 
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('tr-TR', {
+    maximumFractionDigits: 0
+  })
+}
+
 function formatDuration(hours) {
   if (hours === null) return '-'
   if (hours < 24) return `${hours} saat`
@@ -75,6 +81,12 @@ export default function SpoilageSimulator({ item, onClose, onPropose, isProposin
   const hoursLeft = expiresAt && !Number.isNaN(expiresAt.getTime())
     ? Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 3600000))
     : null
+  const blockedActionText = item.is_expired
+    ? 'Süresi geçen ürün için takas yerine ayrı aksiyon gerekli'
+    : item.has_pending_swap
+      ? 'Bu ürün için bekleyen takas var'
+      : 'En yakın eşleşmeye takas önerisi aç'
+  const canPropose = !item.is_expired && !item.has_pending_swap
 
   return (
     <section className="rounded-md border border-[#cfdccf] bg-white">
@@ -144,18 +156,40 @@ export default function SpoilageSimulator({ item, onClose, onPropose, isProposin
           <div className="flex flex-col justify-between gap-3 rounded-md border border-[#dfe8df] bg-[#fbfdfb] p-3 sm:flex-row sm:items-center">
             <div>
               <div className="text-sm font-semibold text-ink">Önerilen aksiyon</div>
-              <div className="text-xs text-moss">En yakın eşleşmeye takas önerisi aç</div>
+              <div className="text-xs text-moss">{blockedActionText}</div>
             </div>
             <button
               className="h-10 rounded-md bg-clay px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isProposing}
+              disabled={!canPropose || isProposing}
               onClick={() => onPropose(item)}
             >
-              {isProposing ? 'Hazırlanıyor' : 'Takas yap'}
+              {item.has_pending_swap ? 'Bekliyor' : isProposing ? 'Hazırlanıyor' : 'Takas yap'}
             </button>
+          </div>
+
+          <div className="rounded-md border border-red-200 bg-red-50 p-3">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-red-800">
+              <AlertTriangle size={17} />
+              Kurtarılmazsa
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <LossMetric icon={Utensils} value={formatNumber(item.lost_meals_if_unrescued)} label="öğün kaybedilir" />
+              <LossMetric icon={HandCoins} value={`${formatNumber(item.lost_local_value_tl_if_unrescued)} TL`} label="yerel değer boşa gider" />
+              <LossMetric icon={TrendingDown} value={`${Number(item.potential_carbon_kg_if_unrescued || 0).toFixed(1)} kg`} label="CO2 etkisi oluşur" />
+            </div>
           </div>
         </div>
       </div>
     </section>
+  )
+}
+
+function LossMetric({ icon: Icon, value, label }) {
+  return (
+    <div className="rounded-md bg-white p-3">
+      <Icon size={16} className="text-red-700" />
+      <div className="mt-2 text-lg font-semibold text-ink">{value}</div>
+      <div className="text-xs text-moss">{label}</div>
+    </div>
   )
 }

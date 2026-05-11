@@ -1,10 +1,11 @@
 import os
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
 
 from app.agents.stock_agent import calculate_risk
 from app.models.inventory import InventoryCreate
+from app.services.impact_engine import build_loss_projection
 from app.services.supabase_client import get_supabase_client
 
 # Bizim bildirim servisini dahil ediyoruz
@@ -22,13 +23,23 @@ async def list_inventory(cooperative_id: str | None = Query(default=None)):
     items = query.execute().data or []
     products = supabase.table("products").select("*").execute().data or []
     cooperatives = supabase.table("cooperatives").select("*").execute().data or []
+    pending_swaps = supabase.table("swaps").select("*").eq("status", "pending").execute().data or []
     product_map = {row["id"]: row for row in products}
     cooperative_map = {row["id"]: row for row in cooperatives}
+    pending_map = {
+        (row.get("from_cooperative_id"), row.get("product_id")): row
+        for row in pending_swaps
+    }
 
     enriched = []
     for item in items:
         product = product_map.get(item.get("product_id"), {})
         cooperative = cooperative_map.get(item.get("cooperative_id"), {})
+        expires_at = _parse_datetime(item.get("expires_at"))
+        now = datetime.now(timezone.utc)
+        hours_until_expiry = round((expires_at - now).total_seconds() / 3600, 1) if expires_at else None
+        is_expired = hours_until_expiry is not None and hours_until_expiry <= 0
+        pending_swap = pending_map.get((item.get("cooperative_id"), item.get("product_id")))
         enriched.append(
             {
                 **item,
@@ -37,6 +48,13 @@ async def list_inventory(cooperative_id: str | None = Query(default=None)):
                 "product_spoilage_rate_days": product.get("spoilage_rate_days"),
                 "cooperative_name": cooperative.get("name", item.get("cooperative_id")),
                 "cooperative_region": cooperative.get("region", ""),
+                "is_expired": is_expired,
+                "hours_until_expiry": hours_until_expiry,
+                "expiry_status": "expired" if is_expired else "active",
+                "has_pending_swap": pending_swap is not None,
+                "pending_swap_id": pending_swap.get("id") if pending_swap else None,
+                "reserved_quantity_kg": float(pending_swap.get("quantity_kg", 0)) if pending_swap else 0,
+                **build_loss_projection(float(item.get("quantity_kg", 0)), product),
             }
         )
     return {"items": enriched}
@@ -82,3 +100,12 @@ async def create_inventory(item: InventoryCreate):
     # --- BİLDİRİM KODU SONU ---
 
     return {"item": created[0] if created else payload}
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed

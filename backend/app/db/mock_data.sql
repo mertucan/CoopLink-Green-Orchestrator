@@ -123,7 +123,7 @@ VALUES
     'Elimde 80 kg domates kaldı',
     'propose_swap',
     'propose_swap',
-    'gemini-1.5-flash',
+    'gemini-2.0-flash',
     TRUE,
     FALSE,
     'Mesaj için intent seç: query_stock, propose_swap, track_delivery. Sadece intent yaz.',

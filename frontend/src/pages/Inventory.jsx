@@ -31,7 +31,10 @@ export default function Inventory({ goTo }) {
         if (!term) return true
         return `${item.product_name} ${item.cooperative_name} ${item.cooperative_region}`.toLocaleLowerCase('tr-TR').includes(term)
       })
-      .sort((a, b) => Number(b.risk_score || 0) - Number(a.risk_score || 0))
+      .sort((a, b) => {
+        if (Boolean(a.is_expired) !== Boolean(b.is_expired)) return a.is_expired ? -1 : 1
+        return Number(b.risk_score || 0) - Number(a.risk_score || 0)
+      })
   }, [category, items, riskOnly, search])
   const handlePropose = (item) => {
     setNotice(null)
@@ -43,7 +46,7 @@ export default function Inventory({ goTo }) {
           const item = result.item
           const title = result.reused ? 'Mevcut öneri açıldı' : 'Takas önerisi oluşturuldu'
           const description = `${item.quantity_kg} kg ${item.product_name}, ${item.from_cooperative_name} -> ${item.to_cooperative_name}. Skor ${Number(item.match_score || 0).toFixed(2)}, tahmini ${Number(item.carbon_saved_kg || 0).toFixed(1)} kg CO2 tasarrufu.`
-          setNotice(result.reused ? `${item.product_name} için mevcut bekleyen takas önerisi açıldı.` : `${item.product_name} için takas önerisi oluşturuldu.`)
+          setNotice(result.reused ? `${item.product_name} için mevcut bekleyen takas önerisi açıldı.` : `${item.product_name} için takas önerisi oluşturuldu. Stok onaylanana kadar listede bekleyen olarak kalır.`)
           showToast({ type: result.reused ? 'info' : 'success', title, description })
         },
         onError: (error) => {
@@ -146,10 +149,16 @@ export default function Inventory({ goTo }) {
                   <td className="truncate px-4 py-3 font-medium">{item.product_name || item.product_id}</td>
                   <td className="truncate px-4 py-3">{item.product_category || '-'}</td>
                   <td className="whitespace-nowrap px-4 py-3">{item.quantity_kg} kg</td>
-                  <td className="px-4 py-3">{item.expires_at ? new Date(item.expires_at).toLocaleDateString('tr-TR') : '-'}</td>
+                  <td className="px-4 py-3">
+                    <div className={item.is_expired ? 'font-semibold text-red-700' : ''}>
+                      {item.expires_at ? new Date(item.expires_at).toLocaleDateString('tr-TR') : '-'}
+                    </div>
+                    {item.is_expired && <div className="mt-1 text-xs text-red-700">Takas yerine ayrı aksiyon</div>}
+                    {!item.is_expired && item.has_pending_swap && <div className="mt-1 text-xs font-medium text-leaf">Takas bekliyor</div>}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="mx-auto w-28">
-                      <RiskBadge value={item.risk_score} />
+                      <RiskBadge value={item.risk_score} expired={item.is_expired} />
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -167,7 +176,7 @@ export default function Inventory({ goTo }) {
                       >
                         {simulatedItemId === item.id ? 'Açık' : 'Simülasyon'}
                       </button>
-                      {Number(item.risk_score) > 0.7 && (
+                      {Number(item.risk_score) > 0.7 && !item.is_expired && !item.has_pending_swap && (
                       <button
                         className="h-9 w-20 shrink-0 rounded-md bg-clay px-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={proposingId === item.id}
@@ -176,7 +185,7 @@ export default function Inventory({ goTo }) {
                         {proposingId === item.id ? '...' : 'Takas'}
                       </button>
                       )}
-                      {Number(item.risk_score) <= 0.7 && <span className="h-9 w-20 shrink-0" aria-hidden="true" />}
+                      {(Number(item.risk_score) <= 0.7 || item.is_expired || item.has_pending_swap) && <span className="h-9 w-20 shrink-0" aria-hidden="true" />}
                     </div>
                   </td>
                 </tr>

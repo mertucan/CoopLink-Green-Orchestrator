@@ -1,4 +1,4 @@
-import { Boxes, Handshake, Leaf, Users } from 'lucide-react'
+import { Boxes, HandCoins, Leaf, Utensils } from 'lucide-react'
 import CarbonChart from '../components/CarbonChart'
 import StatCard from '../components/StatCard'
 import SwapCard from '../components/SwapCard'
@@ -29,10 +29,18 @@ export default function Dashboard({ goTo }) {
       </section>
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Kurtarılan Gıda" value={stats?.total_food_saved_kg ?? 0} unit="kg" icon={Boxes} />
+        <StatCard title="Kurtarılan Öğün" value={formatNumber(stats?.total_saved_meals ?? 0)} icon={Utensils} />
         <StatCard title="CO2 Tasarrufu" value={stats?.total_carbon_saved_kg ?? 0} unit="kg" icon={Leaf} />
-        <StatCard title="Toplam Takas" value={stats?.total_swaps ?? 0} icon={Handshake} />
-        <StatCard title="Aktif Kooperatif" value={stats?.active_cooperatives ?? 0} icon={Users} />
+        <StatCard title="Yerel Değer" value={formatCurrencyCompact(stats?.total_local_value_tl ?? 0)} icon={HandCoins} />
       </div>
+      <section className="panel p-4">
+        <div className="grid gap-3 text-sm md:grid-cols-4">
+          <ImpactMetric label="Bu hafta gıda" value={`${formatNumber(stats?.this_week?.food_saved_kg ?? 0)} kg`} />
+          <ImpactMetric label="Bu hafta öğün" value={formatNumber(stats?.this_week?.saved_meals ?? 0)} />
+          <ImpactMetric label="Bu hafta CO2" value={`${formatNumber(stats?.this_week?.carbon_saved_kg ?? 0)} kg`} />
+          <ImpactMetric label="Bu hafta değer" value={formatCurrency(stats?.this_week?.local_value_tl ?? 0)} />
+        </div>
+      </section>
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <CarbonChart data={stats?.weekly_carbon} />
         <section className="space-y-3">
@@ -44,6 +52,30 @@ export default function Dashboard({ goTo }) {
           {swaps.length === 0 && <div className="panel p-4 text-sm text-moss">Bekleyen takas yok.</div>}
         </section>
       </div>
+    </div>
+  )
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('tr-TR')
+}
+
+function formatCurrency(value) {
+  return `${Number(value || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL`
+}
+
+function formatCurrencyCompact(value) {
+  return Intl.NumberFormat('tr-TR', {
+    notation: 'compact',
+    maximumFractionDigits: 1
+  }).format(Number(value || 0)) + ' TL'
+}
+
+function ImpactMetric({ label, value }) {
+  return (
+    <div className="rounded-md border border-[#edf2ed] bg-[#fbfdfb] p-3">
+      <p className="text-moss">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
     </div>
   )
 }

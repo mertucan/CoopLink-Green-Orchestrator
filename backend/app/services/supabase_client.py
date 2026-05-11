@@ -128,7 +128,7 @@ class DemoSupabaseClient:
                     "user_message": "Elimde 80 kg domates kaldı",
                     "detected_intent": "propose_swap",
                     "selected_tool": "propose_swap",
-                    "model_name": "gemini-1.5-flash",
+                    "model_name": "gemini-2.0-flash",
                     "used_gemini": True,
                     "fallback_used": False,
                     "prompt": "Mesaj için intent seç: query_stock, propose_swap, track_delivery.",

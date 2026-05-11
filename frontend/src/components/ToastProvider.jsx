@@ -44,7 +44,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed right-4 top-4 z-50 flex w-[min(420px,calc(100vw-32px))] flex-col gap-3">
+      <div className="fixed bottom-4 right-4 z-50 flex w-[min(420px,calc(100vw-32px))] flex-col gap-3">
         {toasts.map((toast) => {
           const config = styles[toast.type] || styles.info
           const Icon = config.icon
@@ -75,4 +75,3 @@ export function useToast() {
   }
   return context
 }
-

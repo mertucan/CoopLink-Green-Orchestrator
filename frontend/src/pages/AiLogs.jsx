@@ -1,8 +1,38 @@
-import { Bot, CheckCircle2, RotateCcw } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Bot, CheckCircle2, Filter, RotateCcw, Search } from 'lucide-react'
 import { useAiLogs } from '../hooks/useAiLogs'
 
 export default function AiLogs() {
   const { data: logs = [], isLoading, isError, refetch } = useAiLogs(50)
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [intentFilter, setIntentFilter] = useState('all')
+  const [query, setQuery] = useState('')
+
+  const intentOptions = useMemo(() => {
+    const values = new Set(logs.map((log) => log.detected_intent).filter(Boolean))
+    return ['all', ...Array.from(values)]
+  }, [logs])
+
+  const filteredLogs = useMemo(() => {
+    const search = query.trim().toLowerCase()
+    return logs.filter((log) => {
+      const isTelegram = String(log.channel_id || '').startsWith('telegram:')
+      const sourceMatch =
+        sourceFilter === 'all' ||
+        (sourceFilter === 'gemini' && log.used_gemini) ||
+        (sourceFilter === 'fallback' && !log.used_gemini) ||
+        (sourceFilter === 'telegram' && isTelegram)
+      const intentMatch = intentFilter === 'all' || log.detected_intent === intentFilter
+      const searchText = [
+        log.user_message,
+        log.final_response,
+        log.channel_id,
+        log.selected_tool,
+        log.model_name
+      ].join(' ').toLowerCase()
+      return sourceMatch && intentMatch && (!search || searchText.includes(search))
+    })
+  }, [intentFilter, logs, query, sourceFilter])
 
   return (
     <div className="space-y-5">
@@ -19,15 +49,59 @@ export default function AiLogs() {
         </button>
       </div>
 
+      <section className="panel p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
+          <Filter size={16} className="text-leaf" />
+          Filtreler
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px]">
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-moss" size={17} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Mesaj, yanıt, kanal veya model ara"
+              className="focus-ring h-10 w-full rounded-md border border-[#d8e4d6] bg-white pl-10 pr-3 text-sm text-ink outline-none"
+            />
+          </label>
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+            className="focus-ring h-10 rounded-md border border-[#d8e4d6] bg-white px-3 text-sm text-ink outline-none"
+          >
+            <option value="all">Tüm kaynaklar</option>
+            <option value="gemini">Gemini kullanılanlar</option>
+            <option value="fallback">Fallback olanlar</option>
+            <option value="telegram">Telegram kayıtları</option>
+          </select>
+          <select
+            value={intentFilter}
+            onChange={(event) => setIntentFilter(event.target.value)}
+            className="focus-ring h-10 rounded-md border border-[#d8e4d6] bg-white px-3 text-sm text-ink outline-none"
+          >
+            {intentOptions.map((intent) => (
+              <option key={intent} value={intent}>{intent === 'all' ? 'Tüm intentler' : intent}</option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-3 text-sm text-moss">
+          {filteredLogs.length} / {logs.length} kayıt gösteriliyor.
+        </p>
+      </section>
+
       {isLoading && <div className="panel p-4 text-moss">AI logları yükleniyor...</div>}
       {isError && <div className="panel p-4 text-red-700">AI logları alınamadı.</div>}
 
       <div className="space-y-3">
-        {logs.map((log) => <AiLogCard key={log.id} log={log} />)}
+        {filteredLogs.map((log) => <AiLogCard key={log.id} log={log} />)}
       </div>
 
       {!isLoading && !isError && logs.length === 0 && (
         <div className="panel p-4 text-moss">Henüz AI log kaydı yok. Assistant endpoint'i veya Orchestrator çağrısı sonrası burada görünecek.</div>
+      )}
+
+      {!isLoading && !isError && logs.length > 0 && filteredLogs.length === 0 && (
+        <div className="panel p-4 text-moss">Bu filtrelerle eşleşen AI log kaydı yok.</div>
       )}
     </div>
   )

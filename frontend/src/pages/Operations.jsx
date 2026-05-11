@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Bell, Brain, CheckCircle2, ClipboardList, FileText, Leaf, LineChart, MessageSquare, Sparkles, Truck } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Bell, Brain, ClipboardList, FileText, HandCoins, LineChart, MessageSquare, Sparkles, Truck, Utensils } from 'lucide-react'
 import CarbonChart from '../components/CarbonChart'
 import RiskBadge from '../components/RiskBadge'
 import SwapCard from '../components/SwapCard'
@@ -12,7 +12,6 @@ export default function Operations({ goTo }) {
   const { data: stats } = useStats()
   const { data: inventory = [] } = useInventory('')
   const { data: pendingSwaps = [] } = useSwaps('pending')
-  const { data: approvedSwaps = [] } = useSwaps('approved')
   const { data: leaderboard = [] } = useLeaderboard()
   const { data: aiLogs = [] } = useAiLogs(5)
 
@@ -21,9 +20,7 @@ export default function Operations({ goTo }) {
     .sort((a, b) => Number(b.risk_score || 0) - Number(a.risk_score || 0))
     .slice(0, 6)
 
-  const topCooperative = leaderboard[0]
   const waitingKg = pendingSwaps.reduce((sum, swap) => sum + Number(swap.quantity_kg || 0), 0)
-  const approvedCarbon = approvedSwaps.reduce((sum, swap) => sum + Number(swap.carbon_saved_kg || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -44,8 +41,8 @@ export default function Operations({ goTo }) {
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Bekleyen Tedarik" value={waitingKg.toFixed(0)} unit="kg" icon={ClipboardList} />
         <StatCard title="Acil Stok" value={urgentInventory.length} icon={AlertTriangle} />
-        <StatCard title="Onaylı CO2" value={approvedCarbon.toFixed(1)} unit="kg" icon={Leaf} />
-        <StatCard title="Lider Puan" value={topCooperative?.green_score || 0} icon={CheckCircle2} />
+        <StatCard title="Kurtarılan Öğün" value={formatNumber(stats?.total_saved_meals ?? 0)} icon={Utensils} />
+        <StatCard title="Yerel Değer" value={formatCurrencyCompact(stats?.total_local_value_tl ?? 0)} icon={HandCoins} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -125,7 +122,7 @@ export default function Operations({ goTo }) {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-ink">Bekleyen Onaylar</h2>
-              <p className="text-sm text-moss">Onaylandığında stok düşer, puan ve karbon log yazılır.</p>
+            <p className="text-sm text-moss">Onaylandığında stok düşer; öğün, karbon, TL değer ve puan yazılır.</p>
             </div>
             <button onClick={() => goTo('swaps')} className="rounded-md bg-mist px-3 py-2 text-sm font-medium text-moss">Tümü</button>
           </div>
@@ -135,46 +132,50 @@ export default function Operations({ goTo }) {
           {pendingSwaps.length === 0 && <div className="panel p-4 text-sm text-moss">Bekleyen onay yok.</div>}
         </section>
 
-        <div className="min-w-0 space-y-6">
+        <div className="min-w-0">
           <CarbonChart data={stats?.weekly_carbon} />
-          <section className="panel w-full min-w-0 p-4">
-            <h2 className="text-lg font-semibold text-ink">Kooperatif Performansı</h2>
-            <div className="mt-4 space-y-3">
-              {leaderboard.slice(0, 4).map((coop, index) => (
-                <div key={coop.id} className="flex items-center justify-between border-b border-[#edf2ed] pb-3 last:border-0 last:pb-0">
-                  <div>
-                    <p className="font-medium text-ink">#{index + 1} {coop.name}</p>
-                    <p className="text-sm text-moss">{coop.region} · {coop.total_swaps || 0} onaylı takas</p>
-                  </div>
-                  <span className="rounded-md bg-mist px-2 py-1 text-sm font-semibold text-moss">{coop.green_score} puan</span>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="panel w-full min-w-0 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-ink">Son AI Kararları</h2>
-                <p className="text-sm text-moss">Gemini/fallback intent kararları</p>
-              </div>
-              <button onClick={() => goTo('aiLogs')} className="rounded-md bg-mist px-3 py-2 text-sm font-medium text-moss">Loglar</button>
-            </div>
-            <div className="mt-4 space-y-3">
-              {aiLogs.map((log) => (
-                <div key={log.id} className="rounded-md border border-[#edf2ed] p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium text-ink">{log.detected_intent}</p>
-                    <span className={`rounded px-2 py-1 text-xs font-semibold ${log.used_gemini ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
-                      {log.used_gemini ? 'Gemini' : 'Fallback'}
-                    </span>
-                  </div>
-                  <p className="mt-1 truncate text-sm text-moss">{log.user_message}</p>
-                </div>
-              ))}
-              {aiLogs.length === 0 && <p className="text-sm text-moss">Henüz AI log kaydı yok.</p>}
-            </div>
-          </section>
         </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="panel w-full min-w-0 p-4">
+          <h2 className="text-lg font-semibold text-ink">Kooperatif Performansı</h2>
+          <div className="mt-4 space-y-3">
+            {leaderboard.slice(0, 4).map((coop, index) => (
+              <div key={coop.id} className="flex items-center justify-between border-b border-[#edf2ed] pb-3 last:border-0 last:pb-0">
+                <div>
+                  <p className="font-medium text-ink">#{index + 1} {coop.name}</p>
+                  <p className="text-sm text-moss">{coop.region} · {coop.total_swaps || 0} onaylı takas</p>
+                </div>
+                <span className="rounded-md bg-mist px-2 py-1 text-sm font-semibold text-moss">{coop.green_score} puan</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel w-full min-w-0 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-ink">Son AI Kararları</h2>
+              <p className="text-sm text-moss">Gemini/fallback intent kararları</p>
+            </div>
+            <button onClick={() => goTo('aiLogs')} className="rounded-md bg-mist px-3 py-2 text-sm font-medium text-moss">Loglar</button>
+          </div>
+          <div className="mt-4 space-y-3">
+            {aiLogs.map((log) => (
+              <div key={log.id} className="rounded-md border border-[#edf2ed] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-ink">{log.detected_intent}</p>
+                  <span className={`rounded px-2 py-1 text-xs font-semibold ${log.used_gemini ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+                    {log.used_gemini ? 'Gemini' : 'Fallback'}
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-sm text-moss">{log.user_message}</p>
+              </div>
+            ))}
+            {aiLogs.length === 0 && <p className="text-sm text-moss">Henüz AI log kaydı yok.</p>}
+          </div>
+        </section>
       </div>
     </div>
   )
@@ -232,4 +233,15 @@ function Rule({ label, value, text }) {
       <p className="mt-2 text-moss">{text}</p>
     </div>
   )
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString('tr-TR')
+}
+
+function formatCurrencyCompact(value) {
+  return Intl.NumberFormat('tr-TR', {
+    notation: 'compact',
+    maximumFractionDigits: 1
+  }).format(Number(value || 0)) + ' TL'
 }

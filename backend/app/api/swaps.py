@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.swap import SwapUpdate
 from app.agents.swap_agent import calculate_match_score, haversine_km
 from app.services.carbon_engine import calculate_carbon_saving, calculate_green_points
+from app.services.impact_engine import build_impact_summary
 from app.services.supabase_client import get_supabase_client
 
 router = APIRouter(prefix="/swaps", tags=["swaps"])
@@ -31,6 +32,12 @@ async def propose_swap(payload: dict):
         raise HTTPException(status_code=404, detail="Envanter kaydı bulunamadı.")
 
     item = inventory_rows[0]
+    expires_at = datetime.fromisoformat(str(item["expires_at"]).replace("Z", "+00:00"))
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Son kullanma tarihi geçmiş stok için takas önerisi oluşturulamaz. Bu ürün için ayrı aksiyon alınmalı.")
+
     existing_pending = (
         supabase.table("swaps")
         .select("*")
@@ -132,10 +139,12 @@ def _swap_update_message(swap: dict, previous_status: str, next_status: str, poi
     from_name = swap.get("from_cooperative_name", "Kooperatif")
     to_name = swap.get("to_cooperative_name", "kooperatif")
     carbon = float(swap.get("carbon_saved_kg", 0))
+    meals = int(swap.get("saved_meals", 0))
+    local_value = float(swap.get("local_value_tl", 0))
     if previous_status != "pending":
         return f"{product} takası zaten {previous_status} durumundaydı; ek puan yazılmadı."
     if next_status == "approved":
-        return f"{quantity:g} kg {product} takası onaylandı. {from_name} +{points} yeşil puan aldı, {carbon:.1f} kg CO2 tasarrufu kaydedildi."
+        return f"{quantity:g} kg {product} takası onaylandı. {meals} öğün, {carbon:.1f} kg CO2 ve {local_value:,.0f} TL yerel değer kurtarıldı. {from_name} +{points} yeşil puan aldı."
     if next_status == "rejected":
         return f"{quantity:g} kg {product} takası reddedildi. {from_name} -> {to_name} akışı kapatıldı."
     return f"{product} takası {next_status} durumuna alındı."
@@ -184,6 +193,11 @@ def _enrich_swaps(supabase, swaps: list[dict]) -> list[dict]:
                 "product_name": product.get("name", swap.get("product_id")),
                 "from_cooperative_name": from_coop.get("name", swap.get("from_cooperative_id")),
                 "to_cooperative_name": to_coop.get("name", swap.get("to_cooperative_id")),
+                **build_impact_summary(
+                    float(swap.get("quantity_kg", 0)),
+                    float(swap.get("carbon_saved_kg", 0)),
+                    product,
+                ),
             }
         )
     return enriched
