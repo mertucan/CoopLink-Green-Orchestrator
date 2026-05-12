@@ -73,7 +73,9 @@ function buildRoutePositions(route) {
   ]
 }
 
+// 🌟 AYNI İLDEKİ NOKTALARI DAĞITAN AGRESİF MANTIK
 function buildDisplayCooperatives(cooperatives) {
+  // Kooperatifleri illerine göre grupla
   const groups = cooperatives.reduce((map, coop) => {
     const key = normalizeProvinceName(coop.region)
     map.set(key, [...(map.get(key) || []), coop])
@@ -81,24 +83,34 @@ function buildDisplayCooperatives(cooperatives) {
   }, new Map())
 
   return [...groups.values()].flatMap((group) => {
+    // Aynı ildeki kooperatifleri alfabetik sırala ki her yenilemede yerleri değişmesin
     const sorted = [...group].sort((a, b) => String(a.name).localeCompare(String(b.name), 'tr'))
+    
     return sorted.map((coop, index) => {
+      // Eğer ilde tek bir kooperatif varsa veya koordinatı yoksa olduğu gibi bırak
       if (!Number.isFinite(Number(coop.latitude)) || !Number.isFinite(Number(coop.longitude)) || sorted.length === 1) {
         return { ...coop, same_region_count: sorted.length, region_index: index }
       }
+
+      // 🕷️ SPIDERFY: Çoklu kayıtlarda noktaları bir çember etrafına aç
+      // Çember açısı: Her kooperatifi eşit aralıklarla diz (360 / kooperatif sayısı)
       const angle = (Math.PI * 2 * index) / sorted.length
-      const spread = Math.min(0.1, 0.035 + sorted.length * 0.006)
+      
+      // Dağılma yarıçapı: 2 kooperatif varsa az, 10 kooperatif varsa daha geniş aç (Jüri rahat görsün)
+      // 0.12 civarı bir değer Türkiye haritasında noktaların birbirinden kopuk ama yakın görünmesini sağlar
+      const spread = 0.08 + (sorted.length * 0.015) 
+
       return {
         ...coop,
         same_region_count: sorted.length,
         region_index: index,
-        display_latitude: Number(coop.latitude) + Math.sin(angle) * spread,
+        // Orijinal lat/lon üzerine sin/cos ile yeni pozisyon hesapla
+        display_latitude: Number(coop.latitude) + Math.sin(angle) * (spread * 0.7), // Yatayda biraz daha basık (Türkiye enlemi için)
         display_longitude: Number(coop.longitude) + Math.cos(angle) * spread,
       }
     })
   })
 }
-
 function TurkeyFit() {
   const map = useMap()
   useEffect(() => {
@@ -261,33 +273,39 @@ export default function RiskMap({ goTo }) {
 
   return (
     <div className="space-y-6">
-      <section className="soft-panel flex flex-col justify-between gap-4 p-5 lg:flex-row lg:items-end">
+      {/* 🌟 BAŞLIK ALANI */}
+      <section className="soft-panel flex flex-col justify-between gap-4 p-5 lg:flex-row lg:items-end bg-white dark:bg-slate-900 border border-[#dfe8df] dark:border-slate-800 rounded-2xl shadow-sm transition-colors duration-300">
         <div>
-          <p className="text-sm font-semibold text-leaf">Harita</p>
-          <h1 className="mt-1 text-3xl font-semibold text-ink">Risk Haritası</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-moss">Risk, rota ve talep noktaları.</p>
+          <p className="text-sm font-semibold text-leaf dark:text-emerald-400">Harita</p>
+          <h1 className="mt-1 text-3xl font-semibold text-ink dark:text-white">Risk Haritası</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-moss dark:text-slate-400">Risk, rota ve talep noktaları.</p>
         </div>
-        <button onClick={() => goTo('inventory')} className="focus-ring rounded-md bg-leaf px-4 py-2 text-sm font-medium text-white">
+        <button onClick={() => goTo('inventory')} className="focus-ring rounded-md bg-leaf dark:bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-300">
           Stoklara Git
         </button>
       </section>
 
+      {/* 🌟 ÜST İSTATİSTİK KARTLARI */}
       <div className="grid gap-4 md:grid-cols-4">
-        <MapMetric icon={AlertTriangle} title="Acil Nokta" value={urgentItems.length} tone="text-clay" />
-        <MapMetric icon={Truck} title="Rota" value={routeInsights.length} tone="text-ink" />
-        <MapMetric icon={Leaf} title="Öğün" value={formatNumber(totalLossMeals)} tone="text-leaf" />
-        <MapMetric icon={Route} title="Değer" value={`${formatNumber(totalLossValue)} TL`} tone="text-clay" />
+        <MapMetric icon={AlertTriangle} title="Acil Nokta" value={urgentItems.length} tone="text-clay dark:text-orange-400" />
+        <MapMetric icon={Truck} title="Rota" value={routeInsights.length} tone="text-ink dark:text-white" />
+        <MapMetric icon={Leaf} title="Öğün" value={formatNumber(totalLossMeals)} tone="text-leaf dark:text-emerald-400" />
+        <MapMetric icon={Route} title="Değer" value={`${formatNumber(totalLossValue)} TL`} tone="text-clay dark:text-orange-400" />
       </div>
 
-      <section className="panel overflow-hidden">
+      {/* 🌟 HARİTA VE YAN PANEL (ASIDE) KAPSAYICISI */}
+      <section className="panel overflow-hidden bg-white dark:bg-slate-900 border border-[#dfe8df] dark:border-slate-800 rounded-2xl shadow-sm transition-colors duration-300">
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+          
           <div className="relative h-[540px] min-h-0 overflow-hidden lg:h-[620px]">
+            {/* Not: Haritanın kendisi (TileLayer) bilerek açık renk bırakıldı ki harita üzerindeki kırmızı, yeşil renkli risk düğümleri rahat okunabilsin. */}
             <MapContainer center={[39.1, 35.5]} zoom={6} attributionControl={false} scrollWheelZoom style={{ height: '100%', width: '100%', zIndex: 0 }} className="z-0">
               <TurkeyFit />
               <StableMapSize trigger={`${inventory.length}-${pendingSwaps.length}-${cooperatives.length}`} />
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap katkıcıları" maxZoom={18} />
               <GeoJSON key={`${displayCooperatives.length}-${riskyItems.length}-${routeInsights.length}`} data={turkeyProvinces} style={getProvinceStyle} onEachFeature={handleProvince} />
 
+              {/* ... (Harita içi componentler aynı) ... */}
               {provinceClusters.map((cluster) => (
                 <CircleMarker key={`cluster-${cluster.key}`} center={cluster.center} radius={15 + Math.min(cluster.cooperatives.length * 2, 10)} pathOptions={{ fillColor: cluster.urgentCount ? '#c46f44' : '#1f7a66', color: '#ffffff', weight: 3, fillOpacity: 0.82 }}>
                   <Tooltip direction="top" offset={[0, -12]}>{cluster.cooperatives[0].region} · {cluster.cooperatives.length} kooperatif</Tooltip>
@@ -359,7 +377,8 @@ export default function RiskMap({ goTo }) {
               })}
             </MapContainer>
 
-            <div className="absolute bottom-4 left-4 z-[999] flex flex-wrap gap-2 rounded-md border border-[#dfe8df] bg-white/92 p-2 text-xs font-medium text-moss shadow-sm">
+            {/* 🌟 HARİTA ÜZERİNDEKİ LEJANT */}
+            <div className="absolute bottom-4 left-4 z-[999] flex flex-wrap gap-2 rounded-md border border-[#dfe8df] dark:border-slate-700 bg-white/92 dark:bg-slate-900/90 p-2 text-xs font-medium text-moss dark:text-slate-300 shadow-sm transition-colors duration-300">
               <LegendDot color="#c46f44" label="Acil" />
               <LegendDot color="#d99b28" label="Orta" />
               <LegendDot color="#2f8f5b" label="Hedef" />
@@ -367,34 +386,36 @@ export default function RiskMap({ goTo }) {
             </div>
           </div>
 
-          <aside className="max-h-none overflow-y-auto border-t border-[#dfe8df] bg-white p-4 xl:max-h-[620px] xl:border-l xl:border-t-0">
+          {/* 🌟 YAN PANEL (ASIDE) - Göz Yoran Beyazlık Giderildi */}
+          <aside className="max-h-none overflow-y-auto border-t border-[#dfe8df] dark:border-slate-800 bg-white dark:bg-slate-900 p-4 xl:max-h-[620px] xl:border-l xl:border-t-0 transition-colors duration-300">
             <div className="mb-4 flex items-center gap-2">
-              <MapPinned className="text-leaf" size={20} />
-              <h2 className="text-lg font-semibold text-ink">Acil riskler</h2>
+              <MapPinned className="text-leaf dark:text-emerald-400" size={20} />
+              <h2 className="text-lg font-semibold text-ink dark:text-white">Acil riskler</h2>
             </div>
+            
             <div className="space-y-3">
               {urgentItems.slice(0, 6).map((item) => (
-                <div key={item.id} className="rounded-md border border-[#edf2ed] p-3">
+                <div key={item.id} className="rounded-md border border-[#edf2ed] dark:border-slate-700/50 p-3 hover:dark:bg-slate-800/30 transition-colors duration-200">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-ink">{item.product_name}</p>
-                      <p className="text-sm text-moss">{item.cooperative_name} · {item.quantity_kg} kg</p>
+                      <p className="font-semibold text-ink dark:text-white">{item.product_name}</p>
+                      <p className="text-sm text-moss dark:text-slate-400">{item.cooperative_name} · {item.quantity_kg} kg</p>
                     </div>
-                    <span className="rounded-md bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">{Number(item.risk_score || 0).toFixed(2)}</span>
+                    <span className="rounded-md bg-red-100 dark:bg-red-900/30 px-2 py-1 text-xs font-semibold text-red-700 dark:text-red-400">{Number(item.risk_score || 0).toFixed(2)}</span>
                   </div>
                 </div>
               ))}
-              {urgentItems.length === 0 && <p className="text-sm text-moss">Acil stok yok.</p>}
+              {urgentItems.length === 0 && <p className="text-sm text-moss dark:text-slate-400">Acil stok yok.</p>}
             </div>
 
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-ink">Rotalar</h3>
+              <h3 className="text-sm font-semibold text-ink dark:text-white">Rotalar</h3>
               <div className="mt-3 space-y-2">
                 {routeInsights.slice(0, 4).map((route) => (
-                  <div key={route.swap.id} className="rounded-md border border-[#edf2ed] bg-[#f7faf7] p-3 text-sm text-moss">
+                  <div key={route.swap.id} className="rounded-md border border-[#edf2ed] dark:border-slate-700/50 bg-[#f7faf7] dark:bg-slate-800/40 p-3 text-sm text-moss dark:text-slate-400 transition-colors duration-300">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-ink">{route.swap.product_name || 'Ürün'} · {route.swap.quantity_kg} kg</div>
+                        <div className="font-semibold text-ink dark:text-white">{route.swap.product_name || 'Ürün'} · {route.swap.quantity_kg} kg</div>
                         <div className="mt-1 flex items-center gap-2">
                           <span>{route.from.region}</span>
                           <ArrowRight size={14} />
@@ -412,10 +433,11 @@ export default function RiskMap({ goTo }) {
                     </div>
                   </div>
                 ))}
-                {routeInsights.length === 0 && <p className="text-sm text-moss">Rota yok.</p>}
+                {routeInsights.length === 0 && <p className="text-sm text-moss dark:text-slate-400">Rota yok.</p>}
               </div>
             </div>
           </aside>
+
         </div>
       </section>
     </div>
@@ -424,11 +446,11 @@ export default function RiskMap({ goTo }) {
 
 function MapMetric({ icon: Icon, title, value, tone }) {
   return (
-    <section className="panel p-4">
+    <section className="panel p-4 bg-white dark:bg-slate-900 border border-[#dfe8df] dark:border-slate-800 rounded-2xl shadow-sm transition-colors duration-300">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-moss">{title}</p>
-          <p className="mt-2 text-2xl font-semibold text-ink">{value}</p>
+          <p className="text-sm text-moss dark:text-slate-400">{title}</p>
+          <p className="mt-2 text-2xl font-semibold text-ink dark:text-white">{value}</p>
         </div>
         <Icon className={tone} size={23} />
       </div>
@@ -438,16 +460,16 @@ function MapMetric({ icon: Icon, title, value, tone }) {
 
 function RouteMetric({ label, value }) {
   return (
-    <div className="rounded-md bg-white p-2">
-      <div className="text-[11px] text-moss">{label}</div>
-      <div className="mt-1 font-semibold text-ink">{value}</div>
+    <div className="rounded-md bg-white dark:bg-slate-800/80 p-2 transition-colors duration-300">
+      <div className="text-[11px] text-moss dark:text-slate-400">{label}</div>
+      <div className="mt-1 font-semibold text-ink dark:text-white">{value}</div>
     </div>
   )
 }
 
 function LegendDot({ color, label }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded bg-[#f7faf7] px-2 py-1">
+    <span className="inline-flex items-center gap-1 rounded bg-[#f7faf7] dark:bg-slate-800 px-2 py-1 text-moss dark:text-slate-300 transition-colors duration-300">
       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
       {label}
     </span>

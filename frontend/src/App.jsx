@@ -14,6 +14,9 @@ import Register from './pages/Register'
 import RiskMap from './pages/RiskMap'
 import Swaps from './pages/Swaps'
 
+// 🌟 1. ADIM: Chatbot bileşenini buraya import ettik
+import ChatWidget from './components/ChatWidget' 
+
 const routes = {
   '/': 'home',
   '/login': 'login',
@@ -87,12 +90,18 @@ function AppShell() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
       <Navbar active={page} onChange={navigate} />
       <main className="mx-auto max-w-7xl px-4 py-6">
         {pages[page] || pages.home}
       </main>
-      <TelegramFab />
+
+      {/* 🌟 TELEGRAM BUTONU: Sadece Admin girişi yapıldığında göster */}
+      {role === 'admin' && <TelegramFab />}
+
+      {/* 🌟 CHATBOT (Müşteri Hizmetleri): Admin DEĞİLSE göster (Kooperatif veya Giriş Yapmamış kullanıcılar için) */}
+      {role !== 'admin' && <ChatWidget />}
+      
     </div>
   )
 }

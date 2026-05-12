@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ai_logs, assistant, auth, cooperatives, inventory, products, stats, swaps
+from app.api import ai_logs, assistant, auth, cooperatives, inventory, products, stats, swaps, chat
 from app.services.supabase_client import test_connection
 
 app = FastAPI(title="CoopLink - Green Orchestrator API", version="1.0.0")
@@ -35,3 +35,4 @@ app.include_router(products.router)
 app.include_router(inventory.router)
 app.include_router(stats.router)
 app.include_router(swaps.router)
+app.include_router(chat.router, prefix="/api", tags=["Chat"])
