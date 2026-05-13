@@ -16,6 +16,15 @@ CoopLink - Green Orchestrator, kooperatiflerin stok, talep ve teslimat bilgisini
 2. İsraf önleme: "Elimde 80 kg domates var, bozulacak" mesajı risk skoru ve takas önerisi üretir.
 3. Lojistik optimizasyonu: Yakın kooperatifler için ortak teslimat rotası ve CO2 tasarrufu hesaplanır.
 
+## Kullanıcı Arayüzü ve Operasyonel Modüller
+
+Sistemin tüm katmanları, kooperatif yöneticileri için sade ve veri odaklı bir deneyim sunmak üzere tasarlanmıştır.
+
+### Ana Sayfa
+
+<img width="2940" height="1846" alt="Ekran Resmi 2026-05-13 21 00 34" src="https://github.com/user-attachments/assets/5d8a9b7d-1fff-45db-93e8-c21e5a428292" />
+
+
 ## AI Senaryoları
 
 - İsraf erken uyarı: Son kullanma tarihi, miktar ve risk skoruna göre acil stokları öne çıkarır.
