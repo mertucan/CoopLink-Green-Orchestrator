@@ -21,9 +21,16 @@ CoopLink - Green Orchestrator, kooperatiflerin stok, talep ve teslimat bilgisini
 Sistemin tüm katmanları, kooperatif yöneticileri için sade ve veri odaklı bir deneyim sunmak üzere tasarlanmıştır.
 
 ### Ana Sayfa
-
 <img width="2940" height="1846" alt="Ekran Resmi 2026-05-13 21 00 34" src="https://github.com/user-attachments/assets/5d8a9b7d-1fff-45db-93e8-c21e5a428292" />
 
+### Stok ve Risk Takibi
+<img width="2940" height="1846" alt="Ekran Resmi 2026-05-13 21 01 30" src="https://github.com/user-attachments/assets/a5c6c23c-4adf-420c-b8b0-c1cc469ccf5b" />
+
+### Risk Haritası
+<img width="2940" height="1846" alt="Ekran Resmi 2026-05-13 21 01 16" src="https://github.com/user-attachments/assets/db6bf630-b0fd-4607-a252-7526c74c518d" />
+
+### Yeşil Puan Sıralaması
+<img width="2940" height="1846" alt="Ekran Resmi 2026-05-13 21 00 48" src="https://github.com/user-attachments/assets/455e55a4-6939-4d1e-ad61-6240d25e5f45" />
 
 ## AI Senaryoları
 
