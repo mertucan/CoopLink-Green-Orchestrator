@@ -372,3 +372,9 @@ Ege Tarım Kooperatifi kooperatifinde 80 kg domates var. Risk skoru 1.00. Bu ür
 ## Katkı
 
 Geliştirme adımları için [ROADMAP.md](./ROADMAP.md) dosyasını takip edin. Faz 1-5 demo için zorunlu çekirdeği, Faz 6 ise ses entegrasyonunu kapsar.
+
+## Ekip Üyeleri
+
+*   **Tuba Köten**
+*   **Mert Ekber Uçan**
+*   **Ceylan Ulusoy**
